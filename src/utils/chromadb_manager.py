@@ -18,11 +18,12 @@ logger = logging.getLogger("chromadb_manager")
 class ChromaDBManager:
     """Manages ChromaDB for intelligent pattern storage and retrieval"""
     
-    def __init__(self, host: str = "localhost", port: int = 8000):
+    def __init__(self, host: str = "localhost", port: int = 8000, ollama_client=None):
         self.host = host
         self.port = port
         self.client = None
         self.collections = {}
+        self.ollama_client = ollama_client
         
     async def initialize(self):
         """Initialize ChromaDB client and collections"""
@@ -299,11 +300,17 @@ class ChromaDBManager:
         return "\n".join(text_parts)
     
     async def _generate_embedding(self, text: str) -> List[float]:
-        """Generate embedding for text (placeholder implementation)"""
+        """Generate embedding for text using Ollama"""
         
-        # TODO: Integrate with actual embedding model (Ollama nomic-embed-text)
-        # For now, return a simple hash-based embedding
+        if self.ollama_client:
+            try:
+                # Use Ollama for actual embeddings
+                embedding = await self.ollama_client.embeddings(text, model="nomic-embed-text")
+                return embedding
+            except Exception as e:
+                logger.warning(f"Ollama embedding failed, using fallback: {e}")
         
+        # Fallback: hash-based embedding if Ollama unavailable
         import hashlib
         import struct
         

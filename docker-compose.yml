@@ -275,6 +275,51 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # 🌐 Web UI Server - ChatGPT-like Interface
+  web-ui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web-ui
+    container_name: intelligent_crawl4ai_web_ui
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - CHROMADB_URL=http://chromadb:8000
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
+      - BROWSER_POOL_URLS=http://browser-pool-1:3000,http://browser-pool-2:3000
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8000
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./src:/app/src
+      - ./static:/app/static
+      - web_ui_data:/app/data
+    depends_on:
+      chromadb:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - ai_network
+    ports:
+      - "8888:8000"  # Web UI accessible at http://localhost:8888
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
   # Model Management Service
   model-manager:
     build:
@@ -304,6 +349,8 @@ volumes:
     driver: local
   high_volume_data:
     driver: local
+  web_ui_data:
+    driver: local  # NEW: Volume for web UI data
   prometheus_data:
     driver: local
   grafana_data:

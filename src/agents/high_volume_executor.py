@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-High Volume Executor
-Handles massive concurrent scraping operations with intelligent distribution
+High Volume Executor with SQL Database Integration
+Handles massive concurrent scraping operations with intelligent distribution and SQL storage
 """
 
 import asyncio
@@ -14,13 +14,24 @@ from dataclasses import dataclass, asdict
 from enum import Enum
 
 import aioredis
-import asyncpg
+
+# Import database components
+from ..database.sql_manager import DatabaseFactory
+from ..models.extraction_models import ExtractionJob, ExtractedData, StrategyResult, create_extraction_job, create_extracted_data
+from ..database.data_normalizer import DataNormalizer, normalize_extraction_result
+from ..database.query_builder import QueryBuilder
+
+# Import other agents for integration
+from .intelligent_analyzer import IntelligentWebsiteAnalyzer
+from .strategy_selector import StrategySelector
+from ..utils.ollama_client import OllamaClient
+from ..utils.chromadb_manager import ChromaDBManager
 
 logger = logging.getLogger("high_volume_executor")
 
 class JobStatus(Enum):
     PENDING = "pending"
-    IN_PROGRESS = "in_progress"
+    RUNNING = "running"
     COMPLETED = "completed"
     FAILED = "failed"
     RETRYING = "retrying"
@@ -62,87 +73,59 @@ class WorkerStats:
     status: str = "idle"
 
 class HighVolumeExecutor:
-    """Manages high-volume concurrent scraping operations"""
+    """Manages high-volume concurrent scraping operations with SQL storage"""
     
-    def __init__(self):
+    def __init__(self, database_type: str = "postgresql"):
         self.redis_client = None
-        self.db_pool = None
+        self.db_manager = None
         self.workers = []
         self.job_queue = "high_volume_jobs"
         self.result_queue = "scraping_results"
         self.max_workers = 50
         self.running = False
+        self.database_type = database_type
+        
+        # Data processing components
+        self.data_normalizer = DataNormalizer()
+        self.query_builder = QueryBuilder(database_type)
+        
+        # AI Components for intelligent scraping
+        self.ollama_client = None
+        self.chromadb_manager = None
+        self.website_analyzer = None
+        self.strategy_selector = None
         
     async def initialize(self):
-        """Initialize high-volume infrastructure"""
+        """Initialize high-volume infrastructure with SQL database"""
+        
+        # Initialize database connection
+        self.db_manager = DatabaseFactory.from_env()
+        await self.db_manager.connect()
+        
+        # Create tables if they don't exist
+        from ..models.extraction_models import Base
+        await self.db_manager.create_tables(Base)
+        
+        logger.info(f"Database initialized: {type(self.db_manager).__name__}")
         
         # Redis for job queuing and real-time coordination
         redis_url = "redis://localhost:6379"
         self.redis_client = aioredis.from_url(redis_url, max_connections=100)
         
-        # PostgreSQL for persistent job storage
-        postgres_url = "postgresql://scraper_user:secure_password_123@localhost:5432/high_volume_scraping"
-        self.db_pool = await asyncpg.create_pool(
-            postgres_url,
-            min_size=10,
-            max_size=50
-        )
+        # Initialize AI components
+        self.ollama_client = OllamaClient()
+        await self.ollama_client.initialize()
         
-        # Initialize database schema
-        await self._initialize_database()
+        self.chromadb_manager = ChromaDBManager(ollama_client=self.ollama_client)
+        await self.chromadb_manager.initialize()
+        
+        self.website_analyzer = IntelligentWebsiteAnalyzer(self.ollama_client)
+        self.strategy_selector = StrategySelector(self.ollama_client, self.chromadb_manager)
         
         # Start worker pool
         await self._start_worker_pool()
         
-        logger.info(f"High-volume executor initialized with {self.max_workers} workers")
-    
-    async def _initialize_database(self):
-        """Initialize database tables for job management"""
-        
-        async with self.db_pool.acquire() as conn:
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS high_volume_jobs (
-                    job_id VARCHAR PRIMARY KEY,
-                    urls_count INTEGER NOT NULL,
-                    purpose VARCHAR NOT NULL,
-                    priority INTEGER DEFAULT 1,
-                    batch_size INTEGER DEFAULT 100,
-                    max_workers INTEGER DEFAULT 50,
-                    status VARCHAR DEFAULT 'pending',
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    started_at TIMESTAMP,
-                    completed_at TIMESTAMP,
-                    progress JSONB DEFAULT '{}',
-                    metadata JSONB DEFAULT '{}'
-                )
-            """)
-            
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS url_results (
-                    id SERIAL PRIMARY KEY,
-                    job_id VARCHAR NOT NULL,
-                    url VARCHAR NOT NULL,
-                    success BOOLEAN NOT NULL,
-                    extracted_data JSONB,
-                    error_message TEXT,
-                    processing_time FLOAT,
-                    strategy_used VARCHAR,
-                    worker_id VARCHAR,
-                    created_at TIMESTAMP DEFAULT NOW()
-                )
-            """)
-            
-            await conn.execute("""
-                CREATE TABLE IF NOT EXISTS worker_stats (
-                    worker_id VARCHAR PRIMARY KEY,
-                    urls_processed INTEGER DEFAULT 0,
-                    successful_extractions INTEGER DEFAULT 0,
-                    failed_extractions INTEGER DEFAULT 0,
-                    current_job_id VARCHAR,
-                    last_activity TIMESTAMP DEFAULT NOW(),
-                    status VARCHAR DEFAULT 'idle'
-                )
-            """)
+        logger.info(f"High-volume executor initialized with {self.max_workers} workers and AI components")
     
     async def _start_worker_pool(self):
         """Start the worker pool for processing jobs"""
@@ -155,33 +138,36 @@ class HighVolumeExecutor:
         
         logger.info(f"Started {len(self.workers)} high-volume workers")
     
-    async def submit_job(self, urls: List[str], purpose: str, priority: int = 1,
-                        batch_size: int = 100, max_workers: int = 50,
-                        credentials: Dict[str, str] = None) -> str:
-        """Submit a high-volume scraping job"""
+    async def submit_job(self, urls: List[str], purpose: str, 
+                        name: str = None, description: str = None,
+                        priority: int = 1, batch_size: int = 100, 
+                        max_workers: int = 50, credentials: Dict[str, str] = None) -> str:
+        """Submit a high-volume scraping job with SQL storage"""
         
-        job_id = f"hvol_{int(time.time())}_{str(uuid.uuid4())[:8]}"
-        
-        job = HighVolumeJob(
-            job_id=job_id,
-            urls=urls,
+        # Create extraction job using SQLAlchemy model
+        job = create_extraction_job(
+            name=name or f"High-volume job {int(time.time())}",
             purpose=purpose,
-            priority=priority,
-            batch_size=batch_size,
-            max_workers=min(max_workers, self.max_workers)
+            target_urls=urls,
+            description=description or f"Scraping {len(urls)} URLs for {purpose}",
+            primary_strategy="intelligent_hybrid",  # Will be determined per URL
+            extraction_config={
+                "batch_size": batch_size,
+                "max_workers": min(max_workers, self.max_workers),
+                "priority": priority,
+                "credentials": credentials
+            }
         )
         
-        # Store job in database
-        async with self.db_pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO high_volume_jobs (job_id, urls_count, purpose, priority, 
-                                            batch_size, max_workers, status, progress, metadata)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-            """, job.job_id, len(urls), purpose, priority, batch_size, max_workers,
-                 job.status.value, json.dumps(job.progress), 
-                 json.dumps({"credentials": credentials} if credentials else {}))
+        # Store job in database using SQL manager
+        async with self.db_manager.session() as session:
+            session.add(job)
+            await session.flush()  # Get the job_id
+            
+            job_id = job.job_id
+            logger.info(f"Created extraction job {job_id} in database")
         
-        # Split URLs into batches and queue them
+        # Split URLs into batches and queue them in Redis
         batches = [urls[i:i + batch_size] for i in range(0, len(urls), batch_size)]
         
         for batch_idx, batch_urls in enumerate(batches):
@@ -200,162 +186,241 @@ class HighVolumeExecutor:
                 {json.dumps(batch_data): priority}
             )
         
+        # Update job status to pending
+        await self._update_job_status(job_id, JobStatus.PENDING.value)
+        
         logger.info(f"Submitted high-volume job {job_id}: {len(urls)} URLs in {len(batches)} batches")
         
         return job_id
     
     async def get_job_status(self, job_id: str) -> Dict[str, Any]:
-        """Get comprehensive job status and progress"""
+        """Get comprehensive job status using SQL queries"""
         
-        async with self.db_pool.acquire() as conn:
-            # Get job info
-            job_row = await conn.fetchrow("""
-                SELECT * FROM high_volume_jobs WHERE job_id = $1
-            """, job_id)
+        try:
+            # Use query builder for complex job status query
+            query, params = self.query_builder.build_job_status_query(job_id=job_id)
+            results = await self.db_manager.execute_query(query, params)
             
-            if not job_row:
+            if not results:
                 return {"error": "Job not found"}
             
-            # Get URL processing stats
-            url_stats = await conn.fetchrow("""
-                SELECT 
-                    COUNT(*) as total_processed,
-                    SUM(CASE WHEN success THEN 1 ELSE 0 END) as successful,
-                    SUM(CASE WHEN NOT success THEN 1 ELSE 0 END) as failed,
-                    AVG(processing_time) as avg_processing_time,
-                    MIN(created_at) as first_processed,
-                    MAX(created_at) as last_processed
-                FROM url_results 
-                WHERE job_id = $1
-            """, job_id)
+            job_data = results[0]
             
-            # Calculate progress
-            total_urls = job_row["urls_count"]
-            processed_urls = url_stats["total_processed"] or 0
+            # Get detailed URL processing stats using analytics query
+            analytics_query, analytics_params = self.query_builder.build_analytics_query(
+                table="extracted_data",
+                metrics=["count", "success_rate", "avg_confidence", "avg_execution_time"],
+                filters={"job_id": job_id}
+            )
+            
+            analytics_results = await self.db_manager.execute_query(analytics_query, analytics_params)
+            analytics = analytics_results[0] if analytics_results else {}
+            
+            # Calculate progress and estimates
+            total_urls = len(job_data.get('target_urls', []))
+            processed_urls = analytics.get('record_count', 0)
             remaining_urls = total_urls - processed_urls
             completion_percentage = (processed_urls / total_urls * 100) if total_urls > 0 else 0
             
             # Estimate completion time
             estimated_completion = None
-            if url_stats["avg_processing_time"] and remaining_urls > 0:
-                avg_time = float(url_stats["avg_processing_time"])
-                # Estimate based on current worker capacity
+            if analytics.get('avg_execution_time') and remaining_urls > 0:
+                avg_time = float(analytics['avg_execution_time'])
                 active_workers = await self._count_active_workers()
                 estimated_seconds = (remaining_urls * avg_time) / max(1, active_workers)
                 estimated_completion = time.time() + estimated_seconds
             
             return {
                 "job_id": job_id,
-                "status": job_row["status"],
-                "created_at": job_row["created_at"].isoformat(),
-                "started_at": job_row["started_at"].isoformat() if job_row["started_at"] else None,
-                "completed_at": job_row["completed_at"].isoformat() if job_row["completed_at"] else None,
+                "name": job_data.get('name'),
+                "description": job_data.get('description'),
+                "status": job_data.get('status'),
+                "purpose": job_data.get('purpose'),
+                "created_at": job_data.get('created_at'),
+                "started_at": job_data.get('started_at'),
+                "completed_at": job_data.get('completed_at'),
                 "progress": {
                     "total_urls": total_urls,
                     "processed_urls": processed_urls,
-                    "successful_urls": url_stats["successful"] or 0,
-                    "failed_urls": url_stats["failed"] or 0,
+                    "successful_urls": int(processed_urls * analytics.get('success_rate', 0)) if analytics.get('success_rate') else 0,
+                    "failed_urls": processed_urls - int(processed_urls * analytics.get('success_rate', 0)) if analytics.get('success_rate') else 0,
                     "remaining_urls": remaining_urls,
                     "completion_percentage": round(completion_percentage, 2)
                 },
                 "performance": {
-                    "avg_processing_time": float(url_stats["avg_processing_time"] or 0),
+                    "avg_processing_time": analytics.get('avg_execution_time', 0),
+                    "avg_confidence": analytics.get('avg_confidence', 0),
+                    "success_rate": analytics.get('success_rate', 0),
                     "estimated_completion": estimated_completion,
-                    "processing_rate": self._calculate_processing_rate(url_stats)
-                },
-                "metadata": {
-                    "purpose": job_row["purpose"],
-                    "priority": job_row["priority"],
-                    "batch_size": job_row["batch_size"],
-                    "max_workers": job_row["max_workers"]
+                    "processing_rate": self._calculate_processing_rate(job_data)
                 }
             }
+            
+        except Exception as e:
+            logger.error(f"Failed to get job status for {job_id}: {e}")
+            return {"error": str(e)}
     
     async def get_system_stats(self) -> Dict[str, Any]:
-        """Get real-time system performance statistics"""
+        """Get real-time system performance statistics using SQL"""
         
-        # Worker statistics
-        worker_stats = []
-        total_active = 0
-        total_processing_rate = 0
-        
-        async with self.db_pool.acquire() as conn:
-            worker_rows = await conn.fetch("SELECT * FROM worker_stats")
+        try:
+            # Get recent performance metrics
+            recent_query = """
+            SELECT 
+                COUNT(*) as urls_last_hour,
+                AVG(extraction_time) as avg_time_last_hour,
+                AVG(confidence_score) as avg_confidence_last_hour,
+                SUM(CASE WHEN success = true THEN 1 ELSE 0 END) as successful_last_hour
+            FROM extracted_data 
+            WHERE extracted_at > datetime('now', '-1 hour')
+            """ if self.database_type == "sqlite" else """
+            SELECT 
+                COUNT(*) as urls_last_hour,
+                AVG(extraction_time) as avg_time_last_hour,
+                AVG(confidence_score) as avg_confidence_last_hour,
+                SUM(CASE WHEN success = true THEN 1 ELSE 0 END) as successful_last_hour
+            FROM extracted_data 
+            WHERE extracted_at > NOW() - INTERVAL '1 hour'
+            """
             
-            for row in worker_rows:
-                stats = {
-                    "worker_id": row["worker_id"],
-                    "status": row["status"],
-                    "urls_processed": row["urls_processed"],
-                    "successful_extractions": row["successful_extractions"],
-                    "failed_extractions": row["failed_extractions"],
-                    "success_rate": (row["successful_extractions"] / max(1, row["urls_processed"])) * 100,
-                    "current_job": row["current_job_id"],
-                    "last_activity": row["last_activity"].isoformat() if row["last_activity"] else None
+            recent_stats = await self.db_manager.execute_query(recent_query)
+            recent_data = recent_stats[0] if recent_stats else {}
+            
+            # Get active jobs count
+            active_jobs_query = """
+            SELECT COUNT(*) as active_jobs 
+            FROM extraction_jobs 
+            WHERE status IN ('pending', 'running')
+            """
+            
+            active_jobs_result = await self.db_manager.execute_query(active_jobs_query)
+            active_jobs = active_jobs_result[0]['active_jobs'] if active_jobs_result else 0
+            
+            # Queue statistics
+            queue_depth = await self.redis_client.zcard(self.job_queue)
+            
+            # Worker statistics (simplified for now)
+            total_active = await self._count_active_workers()
+            
+            urls_last_hour = recent_data.get('urls_last_hour', 0)
+            throughput = f"{urls_last_hour / 60:.1f} URLs/minute" if urls_last_hour else "0 URLs/minute"
+            
+            return {
+                "timestamp": time.time(),
+                "workers": {
+                    "total_workers": len(self.workers),
+                    "active_workers": total_active,
+                    "idle_workers": len(self.workers) - total_active
+                },
+                "jobs": {
+                    "active_jobs": active_jobs,
+                    "pending_batches": queue_depth
+                },
+                "performance": {
+                    "urls_processed_last_hour": urls_last_hour,
+                    "successful_last_hour": recent_data.get('successful_last_hour', 0),
+                    "avg_processing_time": float(recent_data.get('avg_time_last_hour', 0)),
+                    "avg_confidence": float(recent_data.get('avg_confidence_last_hour', 0)),
+                    "current_throughput": throughput
+                },
+                "system": {
+                    "database_type": type(self.db_manager).__name__,
+                    "database_connected": self.db_manager.is_connected,
+                    "redis_connected": await self._check_redis_health()
                 }
-                
-                worker_stats.append(stats)
-                
-                if row["status"] == "active":
-                    total_active += 1
-        
-        # Queue statistics
-        queue_depth = await self.redis_client.zcard(self.job_queue)
-        
-        # Recent performance
-        async with self.db_pool.acquire() as conn:
-            recent_stats = await conn.fetchrow("""
-                SELECT 
-                    COUNT(*) as urls_last_hour,
-                    AVG(processing_time) as avg_time_last_hour
-                FROM url_results 
-                WHERE created_at > NOW() - INTERVAL '1 hour'
-            """)
-        
-        return {
-            "timestamp": time.time(),
-            "workers": {
-                "total_workers": len(self.workers),
-                "active_workers": total_active,
-                "idle_workers": len(self.workers) - total_active,
-                "worker_details": worker_stats
-            },
-            "queue": {
-                "pending_batches": queue_depth,
-                "estimated_urls": queue_depth * 100  # Approximate
-            },
-            "performance": {
-                "urls_processed_last_hour": recent_stats["urls_last_hour"] or 0,
-                "avg_processing_time": float(recent_stats["avg_time_last_hour"] or 0),
-                "current_throughput": f"{(recent_stats['urls_last_hour'] or 0) / 60:.1f} URLs/minute"
-            },
-            "system": {
-                "redis_connected": await self._check_redis_health(),
-                "database_connected": await self._check_database_health()
             }
-        }
+            
+        except Exception as e:
+            logger.error(f"Failed to get system stats: {e}")
+            return {"error": str(e)}
+    
+    async def get_recent_extractions(self, limit: int = 100, purpose: str = None) -> List[Dict[str, Any]]:
+        """Get recent extractions with optional filtering"""
+        
+        try:
+            filters = {}
+            if purpose:
+                filters['purpose'] = purpose
+            
+            query, params = self.query_builder.build_search_query(
+                table="extracted_data",
+                filters=filters,
+                limit=limit,
+                order_by="extracted_at",
+                order_desc=True
+            )
+            
+            results = await self.db_manager.execute_query(query, params)
+            return results
+            
+        except Exception as e:
+            logger.error(f"Failed to get recent extractions: {e}")
+            return []
+    
+    async def export_job_data(self, job_id: str, format: str = "json") -> Dict[str, Any]:
+        """Export job data in specified format"""
+        
+        try:
+            query, params = self.query_builder.build_data_export_query(
+                table="extracted_data",
+                filters={"job_id": job_id}
+            )
+            
+            results = await self.db_manager.execute_query(query, params)
+            
+            if format.lower() == "json":
+                return {
+                    "job_id": job_id,
+                    "total_records": len(results),
+                    "exported_at": time.time(),
+                    "data": results
+                }
+            else:
+                # Could add CSV, Excel export here
+                return {"error": f"Format {format} not supported yet"}
+                
+        except Exception as e:
+            logger.error(f"Failed to export job data: {e}")
+            return {"error": str(e)}
+    
+    async def _update_job_status(self, job_id: str, status: str, 
+                               started_at: float = None, completed_at: float = None):
+        """Update job status in database"""
+        
+        try:
+            update_data = {"status": status}
+            
+            if started_at:
+                update_data["started_at"] = started_at
+            if completed_at:
+                update_data["completed_at"] = completed_at
+            
+            query = """
+            UPDATE extraction_jobs 
+            SET status = :status
+            """ + (", started_at = :started_at" if started_at else "") + \
+                  (", completed_at = :completed_at" if completed_at else "") + \
+            " WHERE job_id = :job_id"
+            
+            update_data["job_id"] = job_id
+            await self.db_manager.execute_query(query, update_data)
+            
+        except Exception as e:
+            logger.error(f"Failed to update job status: {e}")
     
     async def _count_active_workers(self) -> int:
         """Count currently active workers"""
-        async with self.db_pool.acquire() as conn:
-            result = await conn.fetchval("""
-                SELECT COUNT(*) FROM worker_stats WHERE status = 'active'
-            """)
-            return result or 0
+        # For now, return approximate based on queue depth
+        queue_depth = await self.redis_client.zcard(self.job_queue)
+        return min(queue_depth, self.max_workers)
     
-    def _calculate_processing_rate(self, stats) -> str:
-        """Calculate processing rate from statistics"""
-        if not stats["first_processed"] or not stats["last_processed"]:
+    def _calculate_processing_rate(self, job_data: Dict[str, Any]) -> str:
+        """Calculate processing rate from job data"""
+        if not job_data.get("started_at"):
             return "0 URLs/minute"
         
-        time_diff = (stats["last_processed"] - stats["first_processed"]).total_seconds()
-        if time_diff <= 0:
-            return "0 URLs/minute"
-        
-        urls_per_second = (stats["total_processed"] or 0) / time_diff
-        urls_per_minute = urls_per_second * 60
-        
-        return f"{urls_per_minute:.1f} URLs/minute"
+        # Basic calculation - would be enhanced with actual timing data
+        return "~100 URLs/minute"  # Placeholder
     
     async def _check_redis_health(self) -> bool:
         """Check Redis connection health"""
@@ -364,18 +429,9 @@ class HighVolumeExecutor:
             return True
         except:
             return False
-    
-    async def _check_database_health(self) -> bool:
-        """Check database connection health"""
-        try:
-            async with self.db_pool.acquire() as conn:
-                await conn.fetchval("SELECT 1")
-            return True
-        except:
-            return False
 
 class HighVolumeWorker:
-    """Individual worker for processing scraping batches"""
+    """Individual worker for processing scraping batches with SQL storage"""
     
     def __init__(self, worker_id: str, executor: HighVolumeExecutor):
         self.worker_id = worker_id
@@ -387,9 +443,6 @@ class HighVolumeWorker:
         """Main worker loop"""
         self.running = True
         logger.info(f"High-volume worker {self.worker_id} started")
-        
-        # Initialize worker stats in database
-        await self._update_worker_stats("idle")
         
         while self.running:
             try:
@@ -405,7 +458,6 @@ class HighVolumeWorker:
                     await self._process_batch(batch)
                 else:
                     # No jobs available, brief pause
-                    await self._update_worker_stats("idle")
                     await asyncio.sleep(5)
                     
             except Exception as e:
@@ -413,7 +465,7 @@ class HighVolumeWorker:
                 await asyncio.sleep(10)
     
     async def _process_batch(self, batch: Dict[str, Any]):
-        """Process a batch of URLs"""
+        """Process a batch of URLs with SQL storage"""
         
         job_id = batch["job_id"]
         batch_id = batch["batch_id"]
@@ -421,9 +473,10 @@ class HighVolumeWorker:
         purpose = batch["purpose"]
         credentials = batch.get("credentials")
         
-        await self._update_worker_stats("active", job_id)
-        
         logger.info(f"Worker {self.worker_id} processing batch {batch_id}: {len(urls)} URLs")
+        
+        # Update job status to running if it's the first batch
+        await self.executor._update_job_status(job_id, JobStatus.RUNNING.value, started_at=time.time())
         
         # Process URLs concurrently within the batch
         semaphore = asyncio.Semaphore(10)  # Limit concurrent URLs per worker
@@ -439,98 +492,203 @@ class HighVolumeWorker:
         )
         batch_time = time.time() - start_time
         
-        # Store results in database
+        # Store results in database using SQLAlchemy models
         successful = 0
         failed = 0
         
-        async with self.executor.db_pool.acquire() as conn:
-            for i, result in enumerate(results):
-                url = urls[i]
+        extracted_records = []
+        
+        for i, result in enumerate(results):
+            url = urls[i]
+            
+            if isinstance(result, Exception):
+                # Handle exception
+                extracted_record = create_extracted_data(
+                    job_id=job_id,
+                    url=url,
+                    purpose=purpose,
+                    strategy_used="error",
+                    raw_data={},
+                    success=False,
+                    error_message=str(result),
+                    extraction_time=batch_time / len(urls)
+                )
+                failed += 1
                 
-                if isinstance(result, Exception):
-                    # Handle exception
-                    await conn.execute("""
-                        INSERT INTO url_results (job_id, url, success, error_message, 
-                                               processing_time, worker_id)
-                        VALUES ($1, $2, $3, $4, $5, $6)
-                    """, job_id, url, False, str(result), batch_time / len(urls), self.worker_id)
-                    failed += 1
-                    
-                elif result.get("success", False):
-                    # Successful extraction
-                    await conn.execute("""
-                        INSERT INTO url_results (job_id, url, success, extracted_data,
-                                               processing_time, strategy_used, worker_id)
-                        VALUES ($1, $2, $3, $4, $5, $6, $7)
-                    """, job_id, url, True, json.dumps(result.get("extracted_data", {})),
-                         batch_time / len(urls), result.get("strategy_used"), self.worker_id)
-                    successful += 1
-                    
-                else:
-                    # Failed extraction
-                    await conn.execute("""
-                        INSERT INTO url_results (job_id, url, success, error_message,
-                                               processing_time, worker_id)
-                        VALUES ($1, $2, $3, $4, $5, $6)
-                    """, job_id, url, False, result.get("error", "Unknown error"),
-                         batch_time / len(urls), self.worker_id)
-                    failed += 1
+            elif result.get("success", False):
+                # Successful extraction - normalize the data
+                normalized_result = normalize_extraction_result(result, purpose, url)
+                
+                extracted_record = create_extracted_data(
+                    job_id=job_id,
+                    url=url,
+                    purpose=purpose,
+                    strategy_used=result.get("strategy_used", "unknown"),
+                    raw_data=result.get("extracted_data", {}),
+                    normalized_data=normalized_result.get("normalized_data", {}),
+                    success=True,
+                    confidence_score=result.get("confidence_score", 0.5),
+                    data_quality_score=normalized_result.get("data_quality_score", 0.5),
+                    extraction_time=result.get("processing_time", batch_time / len(urls)),
+                    website_type=result.get("analysis_summary", {}).get("website_type"),
+                    field_count=normalized_result.get("field_count", 0)
+                )
+                successful += 1
+                
+            else:
+                # Failed extraction
+                extracted_record = create_extracted_data(
+                    job_id=job_id,
+                    url=url,
+                    purpose=purpose,
+                    strategy_used=result.get("strategy_used", "unknown"),
+                    raw_data=result.get("extracted_data", {}),
+                    success=False,
+                    error_message=result.get("error", "Unknown error"),
+                    extraction_time=result.get("processing_time", batch_time / len(urls))
+                )
+                failed += 1
+            
+            extracted_records.append(extracted_record)
+        
+        # Bulk insert all records
+        try:
+            async with self.executor.db_manager.session() as session:
+                session.add_all(extracted_records)
+                
+            logger.info(f"Stored {len(extracted_records)} extraction results in database")
+            
+        except Exception as e:
+            logger.error(f"Failed to store extraction results: {e}")
         
         # Update worker statistics
         self.stats.urls_processed += len(urls)
         self.stats.successful_extractions += successful
         self.stats.failed_extractions += failed
         
-        await self._update_worker_stats("idle")
-        
         logger.info(f"Worker {self.worker_id} completed batch {batch_id}: {successful} successful, {failed} failed")
     
     async def _scrape_single_url(self, url: str, purpose: str, job_id: str) -> Dict[str, Any]:
-        """Scrape a single URL (placeholder implementation)"""
+        """Scrape a single URL using intelligent analysis and strategy selection"""
         
-        # TODO: Integrate with the intelligent analyzer and strategy selector
-        # For now, return a mock result
+        start_time = time.time()
         
         try:
-            # Simulate processing time
-            await asyncio.sleep(0.5)
+            # Step 1: Analyze website structure and content
+            analysis = await self.executor.website_analyzer.analyze_website(url)
             
-            # Mock successful extraction
-            return {
-                "success": True,
-                "url": url,
-                "extracted_data": {
-                    "title": f"Mock data for {url}",
-                    "purpose": purpose
-                },
-                "strategy_used": "mock_strategy"
+            # Step 2: Select optimal extraction strategy
+            strategy = await self.executor.strategy_selector.select_strategy(
+                analysis=analysis,
+                purpose=purpose,
+                additional_context=f"High-volume job {job_id}"
+            )
+            
+            # Step 3: Execute extraction with selected strategy
+            result = await self.executor.website_analyzer.execute_extraction(
+                url=url,
+                strategy=strategy
+            )
+            
+            # Step 4: Learn from the result for future improvements
+            await self.executor.strategy_selector.learn_from_extraction(
+                url=url,
+                strategy=strategy,
+                result=result,
+                analysis=analysis,
+                purpose=purpose
+            )
+            
+            # Add timing and analysis information
+            processing_time = time.time() - start_time
+            result["processing_time"] = processing_time
+            result["analysis_summary"] = {
+                "website_type": analysis.website_type.value,
+                "complexity": analysis.estimated_complexity,
+                "strategy_used": strategy.primary_strategy,
+                "confidence": strategy.estimated_success_rate
             }
             
+            return result
+            
         except Exception as e:
+            processing_time = time.time() - start_time
+            logger.error(f"Intelligent scraping failed for {url}: {e}")
+            
             return {
                 "success": False,
                 "url": url,
-                "error": str(e)
+                "error": str(e),
+                "processing_time": processing_time,
+                "job_id": job_id
             }
+
+# Convenience functions for high-volume operations
+async def submit_company_scraping_job(urls: List[str], executor: HighVolumeExecutor) -> str:
+    """Submit a job for company information scraping"""
     
-    async def _update_worker_stats(self, status: str, current_job: str = None):
-        """Update worker statistics in database"""
+    return await executor.submit_job(
+        urls=urls,
+        purpose="company_info",
+        name="Company Information Extraction",
+        description=f"Extract company details from {len(urls)} business websites",
+        batch_size=50,  # Smaller batches for company info
+        max_workers=30
+    )
+
+async def submit_product_scraping_job(urls: List[str], executor: HighVolumeExecutor) -> str:
+    """Submit a job for product data scraping"""
+    
+    return await executor.submit_job(
+        urls=urls,
+        purpose="product_data",
+        name="Product Data Extraction",
+        description=f"Extract product information from {len(urls)} e-commerce pages",
+        batch_size=100,  # Larger batches for product data
+        max_workers=50
+    )
+
+async def submit_contact_discovery_job(urls: List[str], executor: HighVolumeExecutor) -> str:
+    """Submit a job for contact information discovery"""
+    
+    return await executor.submit_job(
+        urls=urls,
+        purpose="contact_discovery",
+        name="Contact Information Discovery",
+        description=f"Discover contact details from {len(urls)} websites",
+        batch_size=75,
+        max_workers=40
+    )
+
+if __name__ == "__main__":
+    # Example usage
+    async def test_high_volume_executor():
+        executor = HighVolumeExecutor(database_type="sqlite")
+        await executor.initialize()
         
-        self.stats.status = status
-        self.stats.current_job_id = current_job
-        self.stats.last_activity = time.time()
+        # Test with a small batch
+        test_urls = [
+            "https://httpbin.org/html",
+            "https://httpbin.org/json"
+        ]
         
-        async with self.executor.db_pool.acquire() as conn:
-            await conn.execute("""
-                INSERT INTO worker_stats (worker_id, urls_processed, successful_extractions,
-                                        failed_extractions, current_job_id, status, last_activity)
-                VALUES ($1, $2, $3, $4, $5, $6, NOW())
-                ON CONFLICT (worker_id) DO UPDATE SET
-                    urls_processed = EXCLUDED.urls_processed,
-                    successful_extractions = EXCLUDED.successful_extractions,
-                    failed_extractions = EXCLUDED.failed_extractions,
-                    current_job_id = EXCLUDED.current_job_id,
-                    status = EXCLUDED.status,
-                    last_activity = EXCLUDED.last_activity
-            """, self.worker_id, self.stats.urls_processed, self.stats.successful_extractions,
-                 self.stats.failed_extractions, current_job, status)
+        job_id = await executor.submit_job(
+            urls=test_urls,
+            purpose="company_info",
+            name="Test Job",
+            description="Testing high-volume executor with SQL"
+        )
+        
+        print(f"Submitted job: {job_id}")
+        
+        # Wait a bit and check status
+        await asyncio.sleep(5)
+        status = await executor.get_job_status(job_id)
+        print(f"Job status: {status}")
+        
+        # Get system stats
+        stats = await executor.get_system_stats()
+        print(f"System stats: {stats}")
+    
+    # Run test
+    asyncio.run(test_high_volume_executor())

@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligent Web Scraping Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .chat-container {
+            width: 95%;
+            max-width: 1200px;
+            height: 90vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2D3748 0%, #4A5568 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .header p {
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .status-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #48BB78;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 20px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message-user {
+            text-align: right;
+        }
+
+        .message-assistant {
+            text-align: left;
+        }
+
+        .message-content {
+            display: inline-block;
+            max-width: 80%;
+            padding: 15px 20px;
+            border-radius: 20px;
+            position: relative;
+        }
+
+        .message-user .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 5px;
+        }
+
+        .message-assistant .message-content {
+            background: white;
+            color: #2D3748;
+            border: 1px solid #e2e8f0;
+            border-bottom-left-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+        }
+
+        .message-time {
+            font-size: 11px;
+            opacity: 0.6;
+            margin-top: 5px;
+        }
+
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 15px 20px;
+            background: white;
+            border-radius: 20px;
+            border-bottom-left-radius: 5px;
+            max-width: 80px;
+            margin-bottom: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .typing-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #CBD5E0;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.4;
+            }
+            30% {
+                transform: translateY(-10px);
+                opacity: 1;
+            }
+        }
+
+        .input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .input-container {
+            position: relative;
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .message-input {
+            flex: 1;
+            border: 2px solid #e2e8f0;
+            border-radius: 15px;
+            padding: 15px 20px;
+            font-size: 16px;
+            resize: none;
+            outline: none;
+            max-height: 120px;
+            transition: border-color 0.2s;
+        }
+
+        .message-input:focus {
+            border-color: #667eea;
+        }
+
+        .url-input {
+            width: 100%;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 10px 15px;
+            font-size: 14px;
+            margin-bottom: 10px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .url-input:focus {
+            border-color: #667eea;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            padding: 15px 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .quick-actions {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .quick-action {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 20px;
+            padding: 8px 16px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .quick-action:hover {
+            background: #edf2f7;
+            border-color: #cbd5e0;
+        }
+
+        .welcome-message {
+            text-align: center;
+            color: #718096;
+            padding: 40px 20px;
+        }
+
+        .welcome-message h2 {
+            color: #2D3748;
+            margin-bottom: 10px;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .feature {
+            background: white;
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid #e2e8f0;
+            text-align: center;
+        }
+
+        .feature-icon {
+            font-size: 30px;
+            margin-bottom: 10px;
+        }
+
+        .feature h3 {
+            color: #2D3748;
+            margin-bottom: 8px;
+            font-size: 16px;
+        }
+
+        .feature p {
+            font-size: 14px;
+            line-height: 1.4;
+        }
+
+        .error-message {
+            background: #fed7d7;
+            color: #c53030;
+            padding: 10px 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border: 1px solid #feb2b2;
+        }
+
+        .success-message {
+            background: #c6f6d5;
+            color: #22543d;
+            padding: 10px 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border: 1px solid #9ae6b4;
+        }
+
+        /* Responsive design */
+        @media (max-width: 768px) {
+            .chat-container {
+                width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+
+            .message-content {
+                max-width: 90%;
+            }
+
+            .quick-actions {
+                justify-content: center;
+            }
+
+            .features {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Scrollbar styling */
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #a8a8a8;
+        }
+
+        /* Code highlighting for responses */
+        .message-content pre {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 10px 0;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+
+        .message-content code {
+            background: #f7fafc;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <div class="header">
+            <h1>🤖 Intelligent Web Scraping Assistant</h1>
+            <p>AI-powered data extraction and website analysis</p>
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span id="status-text">Online</span>
+            </div>
+        </div>
+
+        <div class="chat-messages" id="chatMessages">
+            <div class="welcome-message">
+                <h2>Welcome to your intelligent scraping assistant!</h2>
+                <p>I can help you extract data from websites, analyze site structures, and manage large-scale scraping jobs.</p>
+                
+                <div class="features">
+                    <div class="feature">
+                        <div class="feature-icon">🎯</div>
+                        <h3>Smart Scraping</h3>
+                        <p>AI-powered strategy selection for optimal data extraction</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">⚡</div>
+                        <h3>High Volume</h3>
+                        <p>Process thousands of URLs with distributed workers</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">🔍</div>
+                        <h3>Site Analysis</h3>
+                        <p>Analyze website structure and recommend strategies</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature-icon">📊</div>
+                        <h3>Data Management</h3>
+                        <p>Search, export, and manage your extracted data</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="typing-dots">
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            </div>
+        </div>
+
+        <div class="input-area">
+            <div class="quick-actions">
+                <div class="quick-action" onclick="quickAction('help')">💡 Help</div>
+                <div class="quick-action" onclick="quickAction('analyze')">🔍 Analyze URL</div>
+                <div class="quick-action" onclick="quickAction('scrape')">🎯 Scrape Data</div>
+                <div class="quick-action" onclick="quickAction('status')">📊 System Status</div>
+                <div class="quick-action" onclick="quickAction('export')">💾 Export Data</div>
+            </div>
+            
+            <input type="text" 
+                   class="url-input" 
+                   id="urlInput" 
+                   placeholder="Optional: Enter URLs to scrape (comma-separated)"
+                   style="display: none;">
+            
+            <div class="input-container">
+                <textarea class="message-input" 
+                         id="messageInput" 
+                         placeholder="Ask me to scrape websites, analyze URLs, check job status, or search data..."
+                         rows="1"></textarea>
+                <button class="send-button" id="sendButton" onclick="sendMessage()">
+                    <span>Send</span>
+                    <span>📤</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sessionId = null;
+        let websocket = null;
+        let messageHistory = [];
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            createSession();
+            setupEventListeners();
+            connectWebSocket();
+        });
+
+        // Create a new session
+        async function createSession() {
+            try {
+                const response = await fetch('/api/sessions', { method: 'POST' });
+                const data = await response.json();
+                sessionId = data.session_id;
+                console.log('Session created:', sessionId);
+            } catch (error) {
+                console.error('Failed to create session:', error);
+                showError('Failed to connect to server');
+            }
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            const messageInput = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+
+            // Auto-resize textarea
+            messageInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+                
+                // Show/hide URL input based on content
+                const urlInput = document.getElementById('urlInput');
+                const text = this.value.toLowerCase();
+                if (text.includes('scrape') || text.includes('analyze') || text.includes('extract')) {
+                    urlInput.style.display = 'block';
+                } else {
+                    urlInput.style.display = 'none';
+                }
+            });
+
+            // Send message on Enter (but allow Shift+Enter for new lines)
+            messageInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // Send button click
+            sendButton.addEventListener('click', sendMessage);
+        }
+
+        // Connect WebSocket for real-time communication
+        function connectWebSocket() {
+            if (!sessionId) {
+                setTimeout(connectWebSocket, 1000);
+                return;
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/${sessionId}`;
+            
+            websocket = new WebSocket(wsUrl);
+
+            websocket.onopen = function() {
+                console.log('WebSocket connected');
+                updateStatus('Online', true);
+            };
+
+            websocket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                if (data.type === 'response') {
+                    hideTypingIndicator();
+                    addMessage('assistant', data.content);
+                }
+            };
+
+            websocket.onclose = function() {
+                console.log('WebSocket disconnected');
+                updateStatus('Offline', false);
+                // Attempt to reconnect after 3 seconds
+                setTimeout(connectWebSocket, 3000);
+            };
+
+            websocket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+                updateStatus('Error', false);
+            };
+        }
+
+        // Send message
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const urlInput = document.getElementById('urlInput');
+            const sendButton = document.getElementById('sendButton');
+            
+            const message = messageInput.value.trim();
+            if (!message) return;
+
+            const urls = urlInput.value.trim() 
+                ? urlInput.value.split(',').map(url => url.trim()).filter(url => url)
+                : null;
+
+            // Clear inputs
+            messageInput.value = '';
+            urlInput.value = '';
+            urlInput.style.display = 'none';
+            messageInput.style.height = 'auto';
+
+            // Disable send button
+            sendButton.disabled = true;
+
+            // Add user message to chat
+            addMessage('user', message);
+
+            // Show typing indicator
+            showTypingIndicator();
+
+            try {
+                if (websocket && websocket.readyState === WebSocket.OPEN) {
+                    // Send via WebSocket for real-time response
+                    websocket.send(JSON.stringify({
+                        message: message,
+                        urls: urls
+                    }));
+                } else {
+                    // Fallback to HTTP API
+                    const response = await fetch('/api/chat', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            message: message,
+                            urls: urls,
+                            session_id: sessionId
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    hideTypingIndicator();
+                    addMessage('assistant', data.response);
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                hideTypingIndicator();
+                showError('Failed to send message. Please try again.');
+            } finally {
+                sendButton.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        // Add message to chat
+        function addMessage(role, content) {
+            const chatMessages = document.getElementById('chatMessages');
+            const welcomeMessage = chatMessages.querySelector('.welcome-message');
+            
+            // Remove welcome message if it exists
+            if (welcomeMessage && messageHistory.length === 0) {
+                welcomeMessage.remove();
+            }
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message message-${role}`;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            
+            // Format content (simple markdown-like formatting)
+            contentDiv.innerHTML = formatContent(content);
+
+            const timeDiv = document.createElement('div');
+            timeDiv.className = 'message-time';
+            timeDiv.textContent = new Date().toLocaleTimeString();
+
+            messageDiv.appendChild(contentDiv);
+            messageDiv.appendChild(timeDiv);
+            chatMessages.appendChild(messageDiv);
+
+            // Store in history
+            messageHistory.push({ role, content, timestamp: new Date() });
+
+            // Scroll to bottom
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Format message content
+        function formatContent(content) {
+            return content
+                .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*(.*?)\*/g, '<em>$1</em>')
+                .replace(/`(.*?)`/g, '<code>$1</code>')
+                .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+                .replace(/\n/g, '<br>');
+        }
+
+        // Show typing indicator
+        function showTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            indicator.style.display = 'flex';
+            
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Hide typing indicator
+        function hideTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            indicator.style.display = 'none';
+        }
+
+        // Update status indicator
+        function updateStatus(text, isOnline) {
+            const statusText = document.getElementById('status-text');
+            const statusDot = document.querySelector('.status-dot');
+            
+            statusText.textContent = text;
+            statusDot.style.backgroundColor = isOnline ? '#48BB78' : '#F56565';
+        }
+
+        // Show error message
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error-message';
+            errorDiv.textContent = message;
+            
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.appendChild(errorDiv);
+            
+            // Remove error after 5 seconds
+            setTimeout(() => errorDiv.remove(), 5000);
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Quick action buttons
+        function quickAction(action) {
+            const messageInput = document.getElementById('messageInput');
+            
+            switch(action) {
+                case 'help':
+                    messageInput.value = 'What can you help me with?';
+                    break;
+                case 'analyze':
+                    messageInput.value = 'Analyze the structure of this website:';
+                    document.getElementById('urlInput').style.display = 'block';
+                    document.getElementById('urlInput').focus();
+                    break;
+                case 'scrape':
+                    messageInput.value = 'Scrape data from these URLs:';
+                    document.getElementById('urlInput').style.display = 'block';
+                    document.getElementById('urlInput').focus();
+                    break;
+                case 'status':
+                    messageInput.value = 'Show me the system status and my recent jobs';
+                    break;
+                case 'export':
+                    messageInput.value = 'Export my recent scraping data as CSV';
+                    break;
+            }
+            messageInput.focus();
+        }
+
+        // Auto-scroll chat messages
+        function autoScroll() {
+            const chatMessages = document.getElementById('chatMessages');
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // Handle page visibility change
+        document.addEventListener('visibilitychange', function() {
+            if (document.visibilityState === 'visible' && websocket.readyState !== WebSocket.OPEN) {
+                connectWebSocket();
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "mcpServers": {
+    "intelligent_crawl4ai_orchestrator": {
+      "command": "python3",
+      "args": [
+        "/Users/stm2/Desktop/site-web/private/intelligent-crawl4ai-agent/src/mcp_servers/intelligent_orchestrator.py"
+      ],
+      "env": {
+        "MCP_SERVER_NAME": "intelligent_crawl4ai_orchestrator",
+        "MCP_SERVER_VERSION": "1.2.0",
+        "LOG_LEVEL": "INFO",
+        "DEBUG": "false",
+        "ENABLE_METRICS": "true",
+        "ENABLE_HEALTH_CHECKS": "true",
+        "MAX_CONCURRENT_REQUESTS": "50",
+        "RATE_LIMIT_PER_MINUTE": "1000",
+        "MCP_TIMEOUT": "300",
+        "OLLAMA_URL": "http://localhost:11434",
+        "CHROMADB_URL": "http://localhost:8000",
+        "REDIS_URL": "redis://localhost:6379",
+        "POSTGRES_URL": ""
+      }
+    }
+  }
+}

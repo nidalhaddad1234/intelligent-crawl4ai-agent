@@ -1,58 +1,232 @@
-# Multi-stage build for the Intelligent Crawl4AI Agent
+# =============================================================================
+# Intelligent Crawl4AI Agent - Production Docker Image
+# =============================================================================
+# Multi-stage build for optimal size and performance
+# Supports both SQLite (standalone) and PostgreSQL (distributed) modes
+
+# -----------------------------------------------------------------------------
+# Stage 1: Base Dependencies
+# -----------------------------------------------------------------------------
 FROM python:3.11-slim as base
 
-# Set environment variables
+# Set build arguments
+ARG DEBIAN_FRONTEND=noninteractive
+ARG PYTHONUNBUFFERED=1
+ARG PYTHONDONTWRITEBYTECODE=1
+
+# Environment variables for Python optimization
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONHASHSEED=random \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_DEFAULT_TIMEOUT=100
+
+# Create app user for security
+RUN groupadd -r appuser && useradd -r -g appuser -u 1000 appuser
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y \
+    # Essential tools
     curl \
     wget \
-    gnupg \
+    gnupg2 \
     unzip \
     git \
+    # Build dependencies
     build-essential \
+    gcc \
+    g++ \
+    # Database drivers
     libpq-dev \
+    libsqlite3-dev \
+    # SSL and crypto
+    ca-certificates \
+    openssl \
+    # Process and system monitoring
+    htop \
+    procps \
+    # Cleanup
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /tmp/* \
+    && rm -rf /var/tmp/*
+
+# -----------------------------------------------------------------------------
+# Stage 2: Node.js for Browser Automation
+# -----------------------------------------------------------------------------
+FROM base as node-stage
+
+# Install Node.js 18 LTS for Playwright
+RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g npm@latest \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js for potential browser automation
-RUN curl -fsSL https://deb.nodesource.com/setup_18.x | bash - \
-    && apt-get install -y nodejs
+# -----------------------------------------------------------------------------
+# Stage 3: Python Dependencies
+# -----------------------------------------------------------------------------
+FROM node-stage as python-deps
 
-# Create app directory
+# Set working directory
 WORKDIR /app
 
-# Copy requirements first for better caching
+# Copy requirements file
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Install Python dependencies with optimizations
+RUN pip install --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip cache purge
 
-# Install Playwright browsers
-RUN playwright install chromium --with-deps
+# Install Playwright browsers with dependencies
+RUN playwright install --with-deps chromium \
+    && playwright install --with-deps firefox \
+    && rm -rf /tmp/* /var/tmp/*
+
+# -----------------------------------------------------------------------------
+# Stage 4: Application Build
+# -----------------------------------------------------------------------------
+FROM python-deps as app-build
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/{src,config,scripts,data,logs,screenshots,exports} \
+    && mkdir -p /app/data/{sqlite,chromadb,uploads,cache} \
+    && mkdir -p /app/logs/{agent,strategies,mcp,performance} \
+    && chown -R appuser:appuser /app
 
 # Copy application code
-COPY src/ ./src/
-COPY config/ ./config/
-COPY scripts/ ./scripts/
+COPY --chown=appuser:appuser src/ ./src/
+COPY --chown=appuser:appuser config/ ./config/
+COPY --chown=appuser:appuser scripts/ ./scripts/
 
-# Create necessary directories
-RUN mkdir -p /app/data /app/logs /app/screenshots
+# Copy Docker-specific configuration
+COPY --chown=appuser:appuser docker/agent-entrypoint.sh ./entrypoint.sh
+COPY --chown=appuser:appuser docker/agent-healthcheck.py ./healthcheck.py
 
-# Set proper permissions
-RUN useradd -m -u 1000 appuser && \
-    chown -R appuser:appuser /app
+# Make scripts executable
+RUN chmod +x ./entrypoint.sh ./healthcheck.py
+
+# -----------------------------------------------------------------------------
+# Stage 5: Production Runtime
+# -----------------------------------------------------------------------------
+FROM app-build as production
+
+# Switch to non-root user
 USER appuser
 
-# Health check
+# Set environment variables for the agent
+ENV \
+    # Application settings\n    APP_ENV=production \
+    LOG_LEVEL=INFO \
+    MAX_WORKERS=10 \
+    CONCURRENT_EXTRACTIONS=5 \
+    \
+    # Database settings (SQLite by default, PostgreSQL if available)\n    DATABASE_TYPE=auto \
+    SQLITE_PATH=/app/data/sqlite/intelligent_agent.db \
+    \
+    # AI services\n    OLLAMA_URL=http://ollama:11434 \
+    CHROMADB_URL=http://chromadb:8000 \
+    CHROMADB_TOKEN=test-token \
+    \
+    # Cache and queue\n    REDIS_URL=redis://redis:6379 \
+    CACHE_TTL=3600 \
+    \
+    # Browser settings\n    BROWSER_HEADLESS=true \
+    BROWSER_TIMEOUT=30000 \
+    MAX_BROWSER_INSTANCES=20 \
+    BROWSER_POOL_URLS=http://browser-pool-1:3000,http://browser-pool-2:3000 \
+    \
+    # Strategy settings\n    DEFAULT_STRATEGY=smart_hybrid \
+    ENABLE_REGEX_FAST_MODE=true \
+    STRATEGY_CONFIDENCE_THRESHOLD=0.7 \
+    \
+    # MCP server settings\n    MCP_SERVER_HOST=0.0.0.0 \
+    MCP_SERVER_PORT=8811 \
+    MCP_TIMEOUT=300 \
+    \
+    # Performance settings\n    MAX_CONCURRENT_REQUESTS=100 \
+    REQUEST_TIMEOUT=60 \
+    RETRY_ATTEMPTS=3 \
+    RATE_LIMIT_PER_MINUTE=60 \
+    \
+    # Monitoring\n    ENABLE_METRICS=true \
+    METRICS_PORT=8812 \
+    HEALTH_CHECK_INTERVAL=30
+
+# Health check using custom Python script
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8811/health || exit 1
+    CMD python healthcheck.py
 
-# Expose MCP server port
-EXPOSE 8811
+# Expose ports
+EXPOSE 8811 8812
 
-# Default command
-CMD ["python", "-m", "src.mcp_servers.intelligent_orchestrator"]
+# Volume mounts for persistent data
+VOLUME ["/app/data", "/app/logs", "/app/screenshots", "/app/exports"]
+
+# Set the entrypoint
+ENTRYPOINT ["./entrypoint.sh"]
+
+# Default command - can be overridden
+CMD ["mcp-server"]
+
+# -----------------------------------------------------------------------------
+# Stage 6: Development Variant
+# -----------------------------------------------------------------------------
+FROM production as development
+
+# Switch back to root for development tools
+USER root
+
+# Install development dependencies
+RUN apt-get update && apt-get install -y \
+    vim \
+    nano \
+    tree \
+    jq \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install additional Python dev tools
+RUN pip install --no-cache-dir \
+    ipython \
+    jupyter \
+    pytest-xdist \
+    pytest-cov \
+    debugpy
+
+# Create development directories
+RUN mkdir -p /app/{tests,docs,notebooks} \
+    && chown -R appuser:appuser /app
+
+# Switch back to app user
+USER appuser
+
+# Development environment variables
+ENV \
+    APP_ENV=development \
+    LOG_LEVEL=DEBUG \
+    ENABLE_DEBUG=true \
+    RELOAD_ON_CHANGE=true
+
+# Expose debug port
+EXPOSE 5678
+
+# Development command
+CMD ["mcp-server", "--debug"]
+
+# =============================================================================
+# Build Commands:
+# 
+# Production:
+# docker build --target production -t intelligent-crawl4ai:latest -f docker/Dockerfile.agent .
+# 
+# Development:
+# docker build --target development -t intelligent-crawl4ai:dev -f docker/Dockerfile.agent .
+# 
+# With build args:
+# docker build --target production \
+#   --build-arg PYTHONUNBUFFERED=1 \
+#   -t intelligent-crawl4ai:v1.0.0 \
+#   -f docker/Dockerfile.agent .
+# =============================================================================
