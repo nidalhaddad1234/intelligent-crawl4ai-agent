@@ -1,0 +1,324 @@
+version: '3.9'
+
+services:
+  # ChromaDB Vector Database
+  chromadb:
+    image: chromadb/chroma:0.6.3
+    container_name: intelligent_crawl4ai_chromadb
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenAuthCredentialsProvider
+      - CHROMA_SERVER_AUTH_CREDENTIALS=test-token
+      - CHROMA_SERVER_AUTH_TOKEN_TRANSPORT_HEADER=X-Chroma-Token
+    volumes:
+      - chromadb_data:/chroma/chroma
+    ports:
+      - "8000:8000"
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Ollama Local AI
+  ollama:
+    image: ollama/ollama:latest
+    container_name: intelligent_crawl4ai_ollama
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - ai_network
+    environment:
+      - OLLAMA_FLASH_ATTENTION=1
+      - OLLAMA_NUM_PARALLEL=4
+      - OLLAMA_MAX_LOADED_MODELS=3
+      - OLLAMA_HOST=0.0.0.0
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+        limits:
+          memory: 8G
+          cpus: '4.0'
+    restart: unless-stopped
+
+  # Redis for task queuing and session management
+  redis:
+    image: redis:7-alpine
+    container_name: intelligent_crawl4ai_redis
+    command: redis-server --appendonly yes --maxmemory 2gb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # PostgreSQL for persistent data storage
+  postgres:
+    image: postgres:15
+    container_name: intelligent_crawl4ai_postgres
+    environment:
+      - POSTGRES_DB=intelligent_scraping
+      - POSTGRES_USER=scraper_user
+      - POSTGRES_PASSWORD=secure_password_123
+      - POSTGRES_INITDB_ARGS=--encoding=UTF-8
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01-init.sql
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scraper_user -d intelligent_scraping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Browser Pool 1 - Primary
+  browser-pool-1:
+    image: browserless/chrome:latest
+    container_name: intelligent_crawl4ai_browser_1
+    ports:
+      - "3001:3000"
+    environment:
+      - CONCURRENT=20
+      - TOKEN=browser_token_1
+      - ENABLE_DEBUGGER=false
+      - MAX_CONCURRENT_SESSIONS=20
+      - PREBOOT_CHROME=true
+      - KEEP_ALIVE=true
+      - DEFAULT_BLOCK_ADS=true
+      - DEFAULT_IGNORE_HTTPS_ERRORS=true
+      - DEFAULT_STEALTH=true
+    shm_size: 2gb
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/json/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Browser Pool 2 - Secondary
+  browser-pool-2:
+    image: browserless/chrome:latest
+    container_name: intelligent_crawl4ai_browser_2
+    ports:
+      - "3002:3000"
+    environment:
+      - CONCURRENT=20
+      - TOKEN=browser_token_2
+      - ENABLE_DEBUGGER=false
+      - MAX_CONCURRENT_SESSIONS=20
+      - PREBOOT_CHROME=true
+      - KEEP_ALIVE=true
+      - DEFAULT_BLOCK_ADS=true
+      - DEFAULT_IGNORE_HTTPS_ERRORS=true
+      - DEFAULT_STEALTH=true
+    shm_size: 2gb
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/json/version"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Main Intelligence Agent
+  intelligent-agent:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.agent
+    container_name: intelligent_crawl4ai_agent
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+      - CHROMADB_URL=http://chromadb:8000
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
+      - BROWSER_POOL_URLS=http://browser-pool-1:3000,http://browser-pool-2:3000
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./src:/app/src
+      - ./config:/app/config
+      - intelligent_agent_data:/app/data
+    depends_on:
+      chromadb:
+        condition: service_healthy
+      ollama:
+        condition: service_started
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - ai_network
+    ports:
+      - "8811:8811"  # MCP server port
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '2.0'
+    restart: unless-stopped
+
+  # High-Volume Worker Pool
+  high-volume-workers:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.workers
+    container_name: intelligent_crawl4ai_workers
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
+      - OLLAMA_URL=http://ollama:11434
+      - CHROMADB_URL=http://chromadb:8000
+      - BROWSER_POOL_URLS=http://browser-pool-1:3000,http://browser-pool-2:3000
+      - MAX_WORKERS=50
+      - MAX_CONCURRENT_PER_WORKER=10
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./src:/app/src
+      - high_volume_data:/app/data
+    depends_on:
+      - intelligent-agent
+      - redis
+      - postgres
+    networks:
+      - ai_network
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 6G
+          cpus: '4.0'
+    restart: unless-stopped
+
+  # Monitoring - Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: intelligent_crawl4ai_prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - ai_network
+    restart: unless-stopped
+
+  # Monitoring - Grafana
+  grafana:
+    image: grafana/grafana:latest
+    container_name: intelligent_crawl4ai_grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin123
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+    ports:
+      - "3000:3000"
+    networks:
+      - ai_network
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # Load Balancer for Browser Pools
+  nginx:
+    image: nginx:alpine
+    container_name: intelligent_crawl4ai_nginx
+    volumes:
+      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "8080:80"
+    depends_on:
+      - browser-pool-1
+      - browser-pool-2
+    networks:
+      - ai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Model Management Service
+  model-manager:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.model-manager
+    container_name: intelligent_crawl4ai_model_manager
+    environment:
+      - OLLAMA_URL=http://ollama:11434
+    volumes:
+      - ./scripts/model_setup.py:/app/model_setup.py
+    depends_on:
+      - ollama
+    networks:
+      - ai_network
+    restart: "no"  # Run once to setup models
+
+volumes:
+  chromadb_data:
+    driver: local
+  ollama_data:
+    driver: local
+  redis_data:
+    driver: local
+  postgres_data:
+    driver: local
+  intelligent_agent_data:
+    driver: local
+  high_volume_data:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  ai_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+# Health check and monitoring configuration
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 30s
+  timeout: 10s
+  retries: 3
+  start_period: 60s
