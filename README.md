@@ -39,20 +39,29 @@ python web_ui_server.py
 
 ---
 
-## 🏗️ **Dual Architecture**
+## 🏗️ **Architecture**
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│  DUAL ACCESS PATTERNS:                                          │
-│                                                                 │
-│  🌐 Web Browser ──→ FastAPI/WebSocket ──→ AI Agent            │
-│  🖥️ Claude Desktop ──→ MCP Server ──→ AI Agent               │
-│                                      ↓                         │
-│                           Shared Backend:                      │
-│                    Ollama + ChromaDB + Strategies              │
-│                                                                 │
-│  Both interfaces use the same intelligent scraping engine!     │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+graph TB
+    WebUI["🌐 Web UI<br/>localhost:8888"]
+    MCP["🤖 Claude Desktop<br/>MCP"]
+    API["🚀 FastAPI<br/>WebSocket"]
+    AI["🧠 AI Layer<br/>Claude + Ollama"]
+    DB["💾 Database<br/>SQLite/PostgreSQL"]
+    Strat["📦 25 Strategies<br/>CSS • LLM • Platform<br/>Hybrid • Specialized"]
+    Engine["🕷️ Crawl4AI<br/>500-2000 URLs/min"]
+    Memory["🧠 ChromaDB<br/>Vector Memory"]
+    Monitor["📊 Monitoring<br/>Grafana • Prometheus"]
+    
+    WebUI --> API
+    MCP --> API
+    API --> AI
+    API --> DB
+    AI --> Strat
+    Strat --> Engine
+    Engine --> Memory
+    Memory --> Monitor
+    DB --> Monitor
 ```
 
 ---
@@ -63,7 +72,6 @@ python web_ui_server.py
 ```bash
 # Install dependencies
 pip install -r requirements.txt
-pip install -r requirements-webui.txt
 
 # Start Web UI
 python web_ui_server.py
@@ -110,7 +118,7 @@ git clone https://github.com/nidalhaddad1234/intelligent-crawl4ai-agent.git
 cd intelligent-crawl4ai-agent
 
 # Install dependencies and start
-pip install -r requirements.txt -r requirements-webui.txt
+pip install -r requirements.txt
 python web_ui_server.py
 
 # Open http://localhost:8888 and start chatting!
@@ -239,7 +247,6 @@ cd intelligent-crawl4ai-agent
 
 # Install Python dependencies
 pip install -r requirements.txt
-pip install -r requirements-webui.txt  # For Web UI
 
 # Install Ollama
 curl -fsSL https://ollama.com/install.sh | sh
