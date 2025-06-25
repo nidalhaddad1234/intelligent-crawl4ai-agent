@@ -8,8 +8,8 @@ A powerful, intelligent web scraping system that combines Claude's strategic pla
 
 ### 🌐 **Web UI (NEW!)** - ChatGPT-like Interface
 ```bash
-# One-command startup
-./start_web_ui.sh
+# Start the Web UI server
+python web_ui_server.py
 
 # Access at: http://localhost:8888
 ```
@@ -57,13 +57,61 @@ A powerful, intelligent web scraping system that combines Claude's strategic pla
 
 ---
 
+## 🚀 **Quick Start Commands**
+
+### Essential Commands (no scripts needed!)
+```bash
+# Install dependencies
+pip install -r requirements.txt
+pip install -r requirements-webui.txt
+
+# Start Web UI
+python web_ui_server.py
+
+# Start MCP Server (for Claude Desktop)
+python src/mcp_servers/intelligent_orchestrator.py
+
+# Start all services with Docker
+docker-compose up -d
+
+# Install Ollama and models
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull llama3.1
+ollama pull nomic-embed-text
+
+# Install Playwright browsers
+playwright install chromium
+
+# Setup environment
+cp .env.example .env
+# Then edit .env with your settings
+```
+
+### Service Management
+```bash
+# Check service health
+docker-compose ps
+
+# View logs
+docker-compose logs -f web-ui
+docker-compose logs -f intelligent-agent
+
+# Stop all services
+docker-compose down
+```
+
+---
+
 ## 🚀 **Quick Start Options**
 
 ### Option 1: Web UI (Recommended for new users)
 ```bash
 git clone https://github.com/nidalhaddad1234/intelligent-crawl4ai-agent.git
 cd intelligent-crawl4ai-agent
-./start_web_ui.sh
+
+# Install dependencies and start
+pip install -r requirements.txt -r requirements-webui.txt
+python web_ui_server.py
 
 # Open http://localhost:8888 and start chatting!
 ```
@@ -72,9 +120,12 @@ cd intelligent-crawl4ai-agent
 ```bash
 git clone https://github.com/nidalhaddad1234/intelligent-crawl4ai-agent.git
 cd intelligent-crawl4ai-agent
-./setup_mcp_server.sh
 
-# Configure Claude Desktop and start using MCP commands
+# Install MCP dependencies
+pip install -r requirements.txt
+
+# Configure Claude Desktop settings (see MCP Integration section)
+# Then start using MCP commands in Claude Desktop
 ```
 
 ### Option 3: Full Production Setup
@@ -180,24 +231,12 @@ Would you like me to show results or start a new job?"
 - Claude Desktop App (optional for MCP)
 - 16GB+ RAM recommended
 
-### All-in-One Setup
+### Manual Installation
 ```bash
 # Clone repository
 git clone https://github.com/nidalhaddad1234/intelligent-crawl4ai-agent.git
 cd intelligent-crawl4ai-agent
 
-# Setup and start everything
-chmod +x start_web_ui.sh
-./start_web_ui.sh
-
-# Access points:
-# 🌐 Web UI: http://localhost:8888
-# 📊 Grafana: http://localhost:3000 (admin/admin123)
-# 📈 Prometheus: http://localhost:9090
-```
-
-### Manual Installation
-```bash
 # Install Python dependencies
 pip install -r requirements.txt
 pip install -r requirements-webui.txt  # For Web UI
@@ -217,6 +256,11 @@ cp .env.example .env
 # Start services
 docker-compose up -d
 ```
+
+### Access Points
+- 🌐 Web UI: http://localhost:8888
+- 📊 Grafana: http://localhost:3000 (admin/admin123)
+- 📈 Prometheus: http://localhost:9090
 
 ---
 
@@ -332,26 +376,6 @@ Assistant: "🎯 LinkedIn company search initiated...
 - System automatically chooses database based on environment
 - Seamless switching between SQLite and PostgreSQL
 
-```bash
-# Test database operations
-python test_sqlite_integration.py
-
-# View database statistics
-python -c "
-from src.database.sql_manager import DatabaseFactory
-import asyncio
-
-async def show_stats():
-    db = DatabaseFactory.from_env()
-    await db.connect()
-    stats = await get_database_stats(db)
-    print(f'Database: {stats}')
-    await db.disconnect()
-
-asyncio.run(show_stats())
-"
-```
-
 ---
 
 ## 🔧 **Configuration**
@@ -395,35 +419,6 @@ PROXY_PASSWORD=your_proxy_password
     }
   }
 }
-```
-
----
-
-## 🧪 **Testing & Validation**
-
-### **Web UI Testing**
-```bash
-# Test Web UI functionality
-python test_web_ui.py
-
-# Start Web UI and run tests
-./start_web_ui.sh
-# Then open http://localhost:8888
-```
-
-### **Core System Testing**
-```bash
-# Test core integration
-python test_integration.py
-
-# Test database operations
-python test_sqlite_integration.py
-
-# Test Docker infrastructure
-python test_docker_infrastructure.py
-
-# Test specific strategies
-python test_regex_strategy.py
 ```
 
 ---
@@ -530,9 +525,6 @@ docker-compose logs -f intelligent-agent
 - [API Reference](docs/api.md)
 - [Strategy Selection Guide](docs/strategies.md)
 - [High-Volume Processing](docs/high_volume.md)
-- [Web UI Complete Guide](WEB_UI_COMPLETE.md)
-- [Docker Infrastructure](DOCKER_INFRASTRUCTURE_COMPLETE.md)
-- [Regex Strategy Guide](REGEX_STRATEGY_COMPLETE.md)
 - [Troubleshooting](docs/troubleshooting.md)
 
 ---
