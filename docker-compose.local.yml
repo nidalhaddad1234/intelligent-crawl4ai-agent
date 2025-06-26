@@ -1,0 +1,70 @@
+services:
+  # ChromaDB Vector Database
+  chromadb:
+    image: chromadb/chroma:0.6.3
+    container_name: intelligent_crawl4ai_chromadb
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ANONYMIZED_TELEMETRY=FALSE
+    volumes:
+      - chromadb_data:/chroma/chroma
+    ports:
+      - "8000:8000"
+    networks:
+      - ai_network
+    restart: unless-stopped
+
+  # Redis for session management
+  redis:
+    image: redis:7-alpine
+    container_name: intelligent_crawl4ai_redis
+    command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - ai_network
+    restart: unless-stopped
+
+  # 🌐 Web UI Server - Uses Local Ollama
+  web-ui:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.web-ui
+    container_name: intelligent_crawl4ai_web_ui
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434  # ← Points to local Ollama
+      - OLLAMA_MODEL=deepseek-coder:1.3b
+      - CHROMADB_URL=http://chromadb:8000
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_TYPE=sqlite
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8000
+      - PYTHONUNBUFFERED=1
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./src:/app/src
+      - ./static:/app/static
+      - ./data:/app/data
+    depends_on:
+      - chromadb
+      - redis
+    networks:
+      - ai_network
+    ports:
+      - "8888:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # ← Allows access to local Ollama
+    restart: unless-stopped
+
+volumes:
+  chromadb_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  ai_network:
+    driver: bridge
