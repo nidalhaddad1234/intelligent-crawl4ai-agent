@@ -555,6 +555,25 @@ docker-compose logs -f intelligent-agent
 - Form automation strategy
 - Complete test coverage
 
+### **📋 TODO: Future Enhancements**
+
+#### **🔄 MCP Bridge Learning Pipeline**
+- **Smart Learning Bridge**: Implement automated pipeline to capture Claude Desktop's extraction insights
+- **Vector Knowledge Transfer**: Store Claude's successful patterns in ChromaDB for local AI learning
+- **Daily Learning Routine**: Export failed extractions → Claude analysis → Pattern storage → Local AI improvement
+- **Expected Impact**: 5-10% success rate improvement monthly, reduced manual intervention
+- **Implementation**: Use existing MCP + ChromaDB infrastructure, no code modifications needed
+
+#### **🧠 DeepSeek Local Fine-tuning**
+- **Specialized Web Scraping AI**: Fine-tune DeepSeek-Coder models for CSS/HTML extraction
+- **LoRA Adaptation**: Lightweight fine-tuning for RTX 2060 6GB VRAM compatibility
+- **Claude-Generated Training Data**: Use Claude Desktop to create specialized extraction examples
+- **Local Model Options**: 
+  - DeepSeek-Coder-1.3B (fastest, 60+ tokens/s)
+  - Llama3.2-3B (50+ tokens/s, proven on RTX 2060)
+- **Expected Benefits**: 10-20x faster than API calls, 100% local operation, domain-specialized knowledge
+- **Training Timeline**: 2-4 hours initial fine-tuning, weekly retraining for continuous improvement
+
 ---
 
 ## 🤝 **Contributing**
