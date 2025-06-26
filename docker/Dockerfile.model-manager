@@ -1,0 +1,34 @@
+# Model Manager Dockerfile
+# Downloads and configures AI models for the Intelligent Crawl4AI Agent
+
+FROM ollama/ollama:latest
+
+# Install Python and dependencies
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python packages
+RUN pip3 install requests
+
+# Create app directory
+WORKDIR /app
+
+# Create config directory
+RUN mkdir -p /app/config
+
+# Copy model setup script
+COPY scripts/model_setup.py /app/model_setup.py
+RUN chmod +x /app/model_setup.py
+
+# Environment variables
+ENV PYTHONUNBUFFERED=1
+ENV OLLAMA_URL=http://ollama:11434
+
+# Setup script
+COPY docker/model-manager-entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
+ENTRYPOINT ["/app/entrypoint.sh"]
