@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # ChromaDB Vector Database
   chromadb:
@@ -192,7 +190,6 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.workers
-    container_name: intelligent_crawl4ai_workers
     environment:
       - REDIS_URL=redis://redis:6379
       - POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
@@ -357,7 +354,7 @@ volumes:
   high_volume_data:
     driver: local
   web_ui_data:
-    driver: local  # NEW: Volume for web UI data
+    driver: local
   prometheus_data:
     driver: local
   grafana_data:
