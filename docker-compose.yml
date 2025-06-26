@@ -25,7 +25,7 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # Ollama Local AI
+  # Ollama Local AI with DeepSeek
   ollama:
     image: ollama/ollama:latest
     container_name: intelligent_crawl4ai_ollama
@@ -40,6 +40,7 @@ services:
       - OLLAMA_NUM_PARALLEL=4
       - OLLAMA_MAX_LOADED_MODELS=3
       - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_PRIMARY_MODEL=deepseek-coder:1.3b
     deploy:
       resources:
         reservations:
@@ -153,6 +154,7 @@ services:
     container_name: intelligent_crawl4ai_agent
     environment:
       - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=deepseek-coder:1.3b
       - CHROMADB_URL=http://chromadb:8000
       - REDIS_URL=redis://redis:6379
       - POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
@@ -172,6 +174,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      model-manager:
+        condition: service_completed_successfully
     networks:
       - ai_network
     ports:
@@ -193,6 +197,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
       - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=deepseek-coder:1.3b
       - CHROMADB_URL=http://chromadb:8000
       - BROWSER_POOL_URLS=http://browser-pool-1:3000,http://browser-pool-2:3000
       - MAX_WORKERS=50
@@ -275,7 +280,7 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # 🌐 Web UI Server - ChatGPT-like Interface
+  # 🌐 Web UI Server - ChatGPT-like Interface with DeepSeek
   web-ui:
     build:
       context: .
@@ -283,6 +288,7 @@ services:
     container_name: intelligent_crawl4ai_web_ui
     environment:
       - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_MODEL=deepseek-coder:1.3b
       - CHROMADB_URL=http://chromadb:8000
       - REDIS_URL=redis://redis:6379
       - POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
@@ -304,6 +310,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      model-manager:
+        condition: service_completed_successfully
     networks:
       - ai_network
     ports:
@@ -320,7 +328,7 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # Model Management Service
+  # 🧠 DeepSeek Model Manager - Downloads and configures models
   model-manager:
     build:
       context: .
@@ -328,10 +336,9 @@ services:
     container_name: intelligent_crawl4ai_model_manager
     environment:
       - OLLAMA_URL=http://ollama:11434
-    volumes:
-      - ./scripts/model_setup.py:/app/model_setup.py
     depends_on:
-      - ollama
+      ollama:
+        condition: service_started
     networks:
       - ai_network
     restart: "no"  # Run once to setup models
