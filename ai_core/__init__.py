@@ -10,6 +10,7 @@ This package contains the core AI components:
 
 from .registry import tool_registry, ai_tool, ToolInfo, ToolParameter, ToolExample
 from .planner import AIPlanner, PlanExecutor, ExecutionPlan, PlanStep
+from .adaptive_planner import AdaptivePlanner
 
 __all__ = [
     'tool_registry',
@@ -18,6 +19,7 @@ __all__ = [
     'ToolParameter', 
     'ToolExample',
     'AIPlanner',
+    'AdaptivePlanner',
     'PlanExecutor',
     'ExecutionPlan',
     'PlanStep'

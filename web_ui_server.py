@@ -22,57 +22,30 @@ from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 
-# Import your existing agent components
+# Import AI-first components
+from ai_core.enhanced_adaptive_planner import EnhancedAdaptivePlanner
+from ai_core.planner import PlanExecutor
+from ai_core.registry import tool_registry
+
+# Import tools to ensure they're registered
 try:
-    from src.agents.intelligent_analyzer import IntelligentWebsiteAnalyzer
-    from src.agents.strategy_selector import StrategySelector
-    from src.agents.high_volume_executor import HighVolumeExecutor
-    from src.utils.chromadb_manager import ChromaDBManager
-    from src.utils.ollama_client import OllamaClient
-    from src.database.sql_manager import DatabaseFactory
-    from src.utils.url_extractor import parse_message_with_urls, extract_urls_from_text
+    from ai_core.tools import crawler, database, analyzer, exporter
 except ImportError as e:
-    print(f"Warning: Could not import agent modules: {e}")
-    # Mock classes for development
-    class IntelligentWebsiteAnalyzer:
-        def __init__(self, *args, **kwargs): pass
-        async def analyze_website(self, url): return {"mock": True}
-    
-    class StrategySelector:
-        def __init__(self, *args, **kwargs): pass
-        async def select_strategy(self, **kwargs): return {"primary_strategy": "mock"}
-    
-    class HighVolumeExecutor:
-        def __init__(self, *args, **kwargs): pass
-        async def initialize(self): pass
-        async def submit_job(self, **kwargs): return "mock-job-id"
-    
-    class ChromaDBManager:
-        def __init__(self, *args, **kwargs): pass
-        async def initialize(self): pass
-    
-    class OllamaClient:
-        def __init__(self, *args, **kwargs): pass
-        async def initialize(self): pass
-    
-    class DatabaseFactory:
-        @staticmethod
-        def from_env(): return None
-    
-    # Fallback URL extraction if module not available
-    def parse_message_with_urls(message):
-        import re
-        url_pattern = r'https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)'
-        urls = re.findall(url_pattern, message)
-        cleaned = message
-        for url in urls:
-            cleaned = cleaned.replace(url, '')
-        return cleaned.strip(), urls
-    
-    def extract_urls_from_text(text):
-        import re
-        url_pattern = r'https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)'
-        return re.findall(url_pattern, text)
+    logger.warning(f"Some tools not available: {e}")
+
+# Keep URL extraction utilities
+import re
+def parse_message_with_urls(message):
+    url_pattern = r'https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)'
+    urls = re.findall(url_pattern, message)
+    cleaned = message
+    for url in urls:
+        cleaned = cleaned.replace(url, '')
+    return cleaned.strip(), urls
+
+def extract_urls_from_text(text):
+    url_pattern = r'https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)'
+    return re.findall(url_pattern, text)
 
 # Configure logging
 logging.basicConfig(
@@ -162,72 +135,53 @@ class SessionManager:
                 self.remove_websocket(session_id)
 
 class IntelligentScrapingAgent:
-    """Main agent class that orchestrates all scraping operations"""
+    """AI-First agent - NO HARDCODED LOGIC!"""
     
     def __init__(self):
-        self.ollama_client = None
-        self.chromadb_manager = None
-        self.website_analyzer = None
-        self.strategy_selector = None
-        self.high_volume_executor = None
-        self.database = None
+        # AI planning components with enhanced capabilities (Phase 6)
+        self.planner = EnhancedAdaptivePlanner(
+            model_name=os.getenv('AI_MODEL', 'deepseek-coder:1.3b')
+        )
+        # Note: Enhanced planner handles all configuration internally
+        self.executor = PlanExecutor()
         self._initialized = False
+        
+        # Track execution times for learning
+        self.execution_start_times = {}
         
         # Configuration from environment
         self.config = {
             'ollama_url': os.getenv('OLLAMA_URL', 'http://localhost:11434'),
-            'chromadb_url': os.getenv('CHROMADB_URL', 'http://localhost:8000'),
-            'redis_url': os.getenv('REDIS_URL', 'redis://localhost:6379'),
-            'postgres_url': os.getenv('POSTGRES_URL', ''),
-            'max_concurrent_jobs': int(os.getenv('MAX_CONCURRENT_JOBS', '10')),
             'debug_mode': os.getenv('DEBUG', 'false').lower() == 'true'
         }
     
     async def initialize(self) -> bool:
-        """Initialize all agent components"""
+        """Initialize AI components"""
         if self._initialized:
             return True
         
         try:
-            logger.info("Initializing Intelligent Scraping Agent...")
+            logger.info("Initializing AI-First Scraping Agent...")
             
-            # Initialize Ollama client
-            self.ollama_client = OllamaClient(base_url=self.config['ollama_url'])
-            await self.ollama_client.initialize()
-            logger.info("✅ Ollama client initialized")
+            # Verify AI is available
+            import requests
+            try:
+                response = requests.get(f"{self.config['ollama_url']}/api/tags", timeout=2)
+                if response.status_code == 200:
+                    logger.info("✅ Ollama AI is running")
+                else:
+                    logger.error("❌ Ollama AI is not available")
+                    return False
+            except Exception as e:
+                logger.error(f"❌ Cannot connect to Ollama: {e}")
+                return False
             
-            # Initialize ChromaDB
-            chromadb_host = self.config['chromadb_url'].split('://')[-1].split(':')[0]
-            chromadb_port = int(self.config['chromadb_url'].split(':')[-1]) if ':' in self.config['chromadb_url'] else 8000
-            self.chromadb_manager = ChromaDBManager(
-                host=chromadb_host,
-                port=chromadb_port,
-                ollama_client=self.ollama_client
-            )
-            await self.chromadb_manager.initialize()
-            logger.info("✅ ChromaDB initialized")
-            
-            # Initialize database
-            self.database = DatabaseFactory.from_env()
-            if self.database:
-                await self.database.connect()
-                logger.info("✅ Database initialized")
-            
-            # Initialize website analyzer
-            self.website_analyzer = IntelligentWebsiteAnalyzer(self.ollama_client)
-            logger.info("✅ Website Analyzer initialized")
-            
-            # Initialize strategy selector
-            self.strategy_selector = StrategySelector(self.ollama_client, self.chromadb_manager)
-            logger.info("✅ Strategy Selector initialized")
-            
-            # Initialize high-volume executor
-            self.high_volume_executor = HighVolumeExecutor()
-            await self.high_volume_executor.initialize()
-            logger.info("✅ High-Volume Executor initialized")
+            # Log available tools
+            tools = tool_registry.list_tools()
+            logger.info(f"✅ Registered {len(tools)} tools: {tools}")
             
             self._initialized = True
-            logger.info("🎉 Agent initialization completed successfully!")
+            logger.info("🎉 AI-First Agent initialized successfully!")
             return True
             
         except Exception as e:
@@ -235,292 +189,110 @@ class IntelligentScrapingAgent:
             return False
     
     async def process_chat_message(self, session_id: str, message: str, urls: Optional[List[str]] = None) -> str:
-        """Process a chat message and determine the appropriate action"""
+        """
+        Process ALL messages using AI planning - NO HARDCODED LOGIC!
         
-        # Extract URLs from message if not provided separately
-        extracted_urls = []
-        cleaned_message = message
-        
-        if not urls:
-            # Try to extract URLs from the message text
-            cleaned_message, extracted_urls = parse_message_with_urls(message)
-            urls = extracted_urls if extracted_urls else None
-        
-        # Combine URLs from parameter and extracted URLs
-        all_urls = []
-        if urls:
-            all_urls.extend(urls)
-        if extracted_urls:
-            all_urls.extend([url for url in extracted_urls if url not in urls])
-        
-        # Remove duplicates
-        all_urls = list(dict.fromkeys(all_urls)) if all_urls else None
-        
-        # Log for debugging
-        logger.info(f"Processing message: '{cleaned_message}' with URLs: {all_urls}")
-        
-        # Use cleaned message for intent detection
-        message_lower = cleaned_message.lower()
-        
-        # Analyze intent - check for analyze/check/examine keywords
-        if any(keyword in message_lower for keyword in ['analyze', 'analyse', 'check', 'examine', 'inspect', 'review']):
-            if all_urls and len(all_urls) == 1:
-                return await self._handle_analysis_request(all_urls[0], message)
-            elif all_urls and len(all_urls) > 1:
-                # Analyze multiple sites
-                responses = []
-                for i, url in enumerate(all_urls[:3], 1):  # Limit to 3 for UI clarity
-                    responses.append(f"\n**Analysis {i}: {url}**")
-                    analysis = await self._handle_single_analysis(url)
-                    responses.append(analysis)
-                return "\n".join(responses)
-            else:
-                return "To analyze a website, please provide a URL. For example: 'Analyze https://example.com' or use the URL input field below."
-        
-        # Scraping intent - check for scrape/extract/crawl/get keywords or currency/exchange/price queries
-        elif any(keyword in message_lower for keyword in ['scrape', 'extract', 'get data', 'crawl', 'fetch', 'pull', 'collect', 'gather', 'how much', 'exchange', 'currency', 'rate', 'price', 'cost', 'convert', 'eur', 'usd', 'dollar', 'euro']):
-            if all_urls:
-                return await self._handle_scraping_request(session_id, message, all_urls)
-            else:
-                return "I'd be happy to help you scrape data! Please provide the URLs you'd like me to process. You can type them directly (e.g., 'Scrape https://example.com') or use the URL input field."
-        
-        # Job status intent
-        elif any(keyword in message_lower for keyword in ['job', 'status', 'progress', 'check job', 'job status']):
-            return await self._handle_job_status_request(message)
-        
-        # Search intent
-        elif any(keyword in message_lower for keyword in ['search', 'find', 'look for', 'query']):
-            return await self._handle_search_request(message)
-        
-        # Export intent
-        elif any(keyword in message_lower for keyword in ['export', 'download', 'save', 'csv', 'excel', 'json']):
-            return await self._handle_export_request(message)
-        
-        # Help intent
-        elif any(keyword in message_lower for keyword in ['help', 'what can you do', 'capabilities', 'how to', 'guide']):
-            return self._get_help_message()
-        
-        # If URLs are present but no clear intent, suggest actions
-        elif all_urls:
-            url_list = '\n'.join([f"• {url}" for url in all_urls[:5]])
-            return f"I found these URLs in your message:\n{url_list}\n\nWhat would you like me to do with them?\n\n**Quick Actions:**\n• Type 'analyze' to analyze the website structure\n• Type 'scrape' to extract data\n• Type 'scrape contact info' to extract contact details\n• Type 'scrape products' to extract product information"
-        
-        else:
-            return self._get_conversational_response(message)
-    
-    async def _handle_scraping_request(self, session_id: str, message: str, urls: List[str]) -> str:
-        """Handle a scraping request"""
+        The AI decides:
+        - What the user wants
+        - Which tools to use
+        - How to execute the plan
+        - How to format the response
+        """
         try:
-            if len(urls) > 50:
-                # Use high-volume processing
-                job_id = await self.high_volume_executor.submit_job(
-                    urls=urls,
-                    purpose="general_extraction",
-                    session_id=session_id
-                )
-                return f"🚀 Started high-volume scraping job with ID: {job_id}\n\nProcessing {len(urls)} URLs. You can check the progress with: 'What's the status of job {job_id}?'"
+            # Extract URLs from message if not provided
+            if not urls:
+                _, urls = parse_message_with_urls(message)
             
-            else:
-                # Process directly
-                results = []
-                for url in urls[:10]:  # Limit to 10 for demo
-                    try:
-                        # Mock processing - replace with actual scraping logic
-                        result = {
-                            "url": url,
-                            "success": True,
-                            "data": {"title": f"Mock data for {url}", "content": "Sample extracted content"},
-                            "timestamp": datetime.now(timezone.utc).isoformat()
-                        }
-                        results.append(result)
-                    except Exception as e:
-                        results.append({
-                            "url": url,
-                            "success": False,
-                            "error": str(e)
-                        })
+            # Add context about URLs if provided
+            full_message = message
+            if urls:
+                url_context = f"\n\nURLs provided: {', '.join(urls)}"
+                full_message += url_context
+            
+            # Let AI create the plan
+            logger.info(f"Creating AI plan for: {message}")
+            plan = await self.planner.create_plan(full_message)
+            
+            # Track start time for learning
+            start_time = time.time()
+            
+            # Log the plan for transparency
+            logger.info(f"AI Plan created with {len(plan.steps)} steps, confidence: {plan.confidence:.0%}")
+            for step in plan.steps:
+                logger.info(f"  - Step {step.step_id}: {step.tool}({step.parameters})")
+            
+            # Execute the plan if confident enough
+            if plan.steps and plan.confidence > 0.3:  # Lower threshold for testing
+                executed_plan = await self.executor.execute_plan(plan)
                 
-                successful = sum(1 for r in results if r["success"])
-                return f"✅ Completed scraping {len(urls)} URLs:\n\n• Successful: {successful}\n• Failed: {len(results) - successful}\n\nResults have been saved to your session. Would you like me to export them in a specific format?"
-        
-        except Exception as e:
-            logger.error(f"Scraping request failed: {e}")
-            return f"❌ Sorry, I encountered an error while processing your scraping request: {str(e)}"
-    
-    async def _handle_analysis_request(self, url: str, message: str) -> str:
-        """Handle a website analysis request"""
-        
-        # Check if specific analysis is requested
-        message_lower = message.lower()
-        
-        if 'contact' in message_lower:
-            analysis_type = "contact information extraction"
-        elif 'product' in message_lower:
-            analysis_type = "product data extraction"
-        elif 'price' in message_lower or 'pricing' in message_lower:
-            analysis_type = "pricing information extraction"
-        elif 'review' in message_lower:
-            analysis_type = "reviews and ratings extraction"
-        else:
-            analysis_type = "general data extraction"
-        
-        response = await self._handle_single_analysis(url)
-        response += f"\n\n**Specific Request**: Optimized for {analysis_type}"
-        
-        return response
-    
-    async def _handle_single_analysis(self, url: str) -> str:
-        """Handle analysis for a single URL"""
-        try:
-            # Initialize analyzer if needed
-            if not self.website_analyzer:
-                return "❌ Website analyzer is not initialized. Please check system status."
-            
-            # Analyze the website
-            analysis = await self.website_analyzer.analyze_website(url)
-            
-            # Format the analysis result
-            framework = analysis.get('framework', 'Unknown')
-            has_api = analysis.get('has_api', False)
-            anti_bot = analysis.get('anti_bot_measures', [])
-            recommended_strategy = analysis.get('recommended_strategy', 'DirectoryCSSStrategy')
-            confidence = analysis.get('confidence', 0.5)
-            
-            anti_bot_status = 'Detected: ' + ', '.join(anti_bot) if anti_bot else 'None detected'
-            
-            return f"""🔍 **Website Analysis for {url}:**
-
-• **Framework**: {framework}
-• **Has API**: {'Yes' if has_api else 'No'}
-• **Anti-bot measures**: {anti_bot_status}
-• **Recommended strategy**: {recommended_strategy}
-• **Confidence**: {confidence:.0%}
-
-**Extraction Capabilities Detected:**
-{self._get_extraction_capabilities(analysis)}
-
-Would you like me to proceed with scraping using the recommended strategy?"""
+                # Record outcome for learning
+                execution_time = time.time() - start_time
+                success = executed_plan.status.value == "completed"
+                error_details = None
+                
+                if not success:
+                    # Collect error details from failed steps
+                    errors = [step.error for step in executed_plan.steps if step.error]
+                    error_details = "; ".join(errors) if errors else "Unknown error"
+                
+                # Record the outcome
+                await self.planner.record_outcome(
+                    request=message,
+                    plan=executed_plan,
+                    success=success,
+                    execution_time=execution_time,
+                    error_details=error_details
+                )
+                
+                return self._format_plan_results(executed_plan)
+            else:
+                # AI couldn't create a confident plan
+                return self._handle_unclear_request(message, plan.confidence)
             
         except Exception as e:
-            logger.error(f"Analysis request failed: {e}")
-            return f"❌ Sorry, I couldn't analyze the website: {str(e)}"
+            logger.error(f"Error processing message: {e}")
+            return self._handle_error(e)
     
-    def _get_extraction_capabilities(self, analysis: Dict[str, Any]) -> str:
-        """Get extraction capabilities from analysis"""
-        capabilities = []
-        
-        # Check for common data types
-        if analysis.get('has_products', False):
-            capabilities.append("• 🛍️ Product listings with prices")
-        if analysis.get('has_contact', False):
-            capabilities.append("• 📧 Contact information (email, phone, address)")
-        if analysis.get('has_business_info', False):
-            capabilities.append("• 🏢 Business details and descriptions")
-        if analysis.get('has_reviews', False):
-            capabilities.append("• ⭐ Reviews and ratings")
-        if analysis.get('has_social_links', False):
-            capabilities.append("• 🔗 Social media links")
-        
-        return '\n'.join(capabilities) if capabilities else "• 📄 General content extraction available"
-    
-    async def _handle_job_status_request(self, message: str) -> str:
-        """Handle job status request"""
-        # Extract job ID from message (simple regex or parsing)
-        import re
-        job_match = re.search(r'job[_\s-]?(\w+)', message, re.IGNORECASE)
-        
-        if job_match:
-            job_id = job_match.group(1)
-            # Mock status - replace with actual job status lookup
-            return f"📊 Job Status for {job_id}:\n\n• Status: Processing\n• Progress: 65%\n• Processed: 650/1000 URLs\n• Success rate: 92%\n• Estimated completion: ~5 minutes\n\nI'll notify you when the job is complete!"
+    def _format_plan_results(self, plan) -> str:
+        """Format plan execution results into user-friendly response"""
+        if plan.status.value == "completed":
+            results = []
+            results.append(f"✅ {plan.description}")
+            
+            for step in plan.steps:
+                if step.status.value == "completed":
+                    results.append(f"\n• {step.description}")
+                    if step.result and isinstance(step.result, dict):
+                        if "data" in step.result:
+                            results.append(f"  Found: {len(step.result.get('data', []))} items")
+                elif step.status.value == "failed":
+                    results.append(f"\n❌ Failed: {step.description}")
+                    if step.error:
+                        results.append(f"  Error: {step.error}")
+            
+            return "\n".join(results)
         else:
-            return "To check job status, please provide the job ID. For example: 'What's the status of job abc123?'"
+            return f"❌ Plan execution failed: {plan.description}\n\nPlease try rephrasing your request."
     
-    async def _handle_search_request(self, message: str) -> str:
-        """Handle semantic search request"""
-        try:
-            # Extract search query
-            query = message.replace('search', '').replace('find', '').replace('look for', '').strip()
-            
-            # Mock search results - replace with actual semantic search
-            results = [
-                {"content": f"Found relevant data about: {query}", "similarity": 0.92, "source": "recent_scrape_1"},
-                {"content": f"Additional information on: {query}", "similarity": 0.87, "source": "recent_scrape_2"}
-            ]
-            
-            response = f"🔎 Search results for '{query}':\n\n"
-            for i, result in enumerate(results, 1):
-                response += f"{i}. {result['content']} (similarity: {result['similarity']:.0%})\n"
-            
-            return response + "\nWould you like me to provide more details on any of these results?"
-        
-        except Exception as e:
-            logger.error(f"Search request failed: {e}")
-            return f"❌ Sorry, I couldn't perform the search: {str(e)}"
+    def _handle_unclear_request(self, message: str, confidence: float) -> str:
+        """Handle cases where AI can't understand the request"""
+        return (
+            f"I'm having trouble understanding your request (confidence: {confidence:.0%}).\n\n"
+            "Could you provide more details? For example:\n\n"
+            "• 'Analyze https://example.com for contact information'\n"
+            "• 'Extract product data from these URLs: ...'\n"
+            "• 'Export my recent scraping results as CSV'\n"
+            "• 'Compare prices from multiple websites'"
+        )
     
-    async def _handle_export_request(self, message: str) -> str:
-        """Handle data export request"""
-        # Determine format from message
-        format_map = {
-            'csv': 'CSV',
-            'excel': 'Excel',
-            'json': 'JSON',
-            'xml': 'XML'
-        }
-        
-        format_type = 'JSON'  # default
-        for fmt, name in format_map.items():
-            if fmt in message.lower():
-                format_type = name
-                break
-        
-        return f"📥 Preparing {format_type} export of your scraped data...\n\nExport will include:\n• All recent scraping results\n• Timestamps and metadata\n• Success/failure status\n\nDownload link will be available shortly!"
+    def _handle_error(self, error: Exception) -> str:
+        """Handle errors gracefully"""
+        return (
+            f"I encountered an error while processing your request: {str(error)}\n\n"
+            "Please try rephrasing your request or check the system status."
+        )
     
-    def _get_help_message(self) -> str:
-        """Get help message"""
-        return """🤖 **Intelligent Web Scraping Assistant**
-
-I can help you with:
-
-**🎯 Web Scraping:**
-• "Scrape these URLs: [url1, url2, ...]"
-• "Extract contact information from [url]"
-• "Get product data from these e-commerce sites"
-
-**🔍 Website Analysis:**
-• "Analyze the structure of [url]"
-• "What's the best strategy for scraping [url]?"
-
-**⚡ High-Volume Processing:**
-• "Process these 1000 URLs for business data"
-• "Submit a bulk job for lead generation"
-
-**📊 Job Management:**
-• "What's the status of job [job_id]?"
-• "Show me my recent scraping results"
-
-**🔎 Data Search:**
-• "Search for companies in tech industry"
-• "Find all emails from recent scrapes"
-
-**💾 Data Export:**
-• "Export my data as CSV"
-• "Download results in Excel format"
-
-Just tell me what you'd like to scrape or ask me to analyze a website!"""
-    
-    def _get_conversational_response(self, message: str) -> str:
-        """Get a conversational response for general queries"""
-        greetings = ['hello', 'hi', 'hey', 'good morning', 'good afternoon']
-        
-        if any(greeting in message.lower() for greeting in greetings):
-            return "Hello! I'm your intelligent web scraping assistant. I can help you extract data from websites, analyze site structures, and manage large-scale scraping jobs. What would you like me to help you with today?"
-        
-        elif 'thank' in message.lower():
-            return "You're welcome! Feel free to ask if you need help with any web scraping tasks."
-        
-        else:
-            return "I'm here to help with web scraping and data extraction. You can ask me to scrape URLs, analyze websites, check job status, or search through extracted data. What would you like me to help you with?"
+    # Old hardcoded methods removed - AI handles everything now!
 
 # Initialize global components
 session_manager = SessionManager()
@@ -641,6 +413,50 @@ async def get_system_status():
             "success_rate": 0.95
         }
     )
+
+@app.get("/api/learning/stats")
+async def get_learning_stats():
+    """Get learning system statistics"""
+    stats = await scraping_agent.planner.get_learning_stats()
+    return stats
+
+@app.post("/api/learning/train")
+async def trigger_learning():
+    """Trigger learning routine manually"""
+    report = await scraping_agent.planner.run_learning_routine()
+    return {
+        "status": "completed",
+        "report": report
+    }
+
+@app.get("/api/learning/tool-performance")
+async def get_tool_performance():
+    """Get performance metrics for each tool"""
+    if scraping_agent.planner.memory:
+        performance = await scraping_agent.planner.memory.get_tool_performance()
+        return performance
+    return {"status": "Learning not enabled"}
+
+@app.get("/api/tools/insights")
+async def get_tool_insights():
+    """Get comprehensive insights about tool usage (Phase 6)"""
+    insights = scraping_agent.planner.get_tool_insights()
+    return insights
+
+@app.get("/api/tools/recommendations")
+async def get_tool_recommendations():
+    """Get recommendations for new tools to implement (Phase 6)"""
+    recommendations = scraping_agent.planner.suggest_new_capabilities()
+    return recommendations
+
+@app.post("/api/tools/optimize-pipeline")
+async def optimize_pipeline(tools: List[Dict[str, str]]):
+    """Optimize a tool pipeline for better performance (Phase 6)"""
+    tool_list = [(t['tool'], t['function']) for t in tools]
+    optimized = scraping_agent.planner.orchestrator.optimize_tool_pipeline(
+        tool_list, {'source': 'api'}
+    )
+    return {"optimized_pipeline": optimized}
 
 # WebSocket endpoint for real-time communication
 @app.websocket("/ws/{session_id}")
