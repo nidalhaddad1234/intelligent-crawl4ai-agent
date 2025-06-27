@@ -7,51 +7,15 @@ services:
       - IS_PERSISTENT=TRUE
       - PERSIST_DIRECTORY=/chroma/chroma
       - ANONYMIZED_TELEMETRY=FALSE
-      - CHROMA_SERVER_AUTH_CREDENTIALS_PROVIDER=chromadb.auth.token.TokenAuthCredentialsProvider
-      - CHROMA_SERVER_AUTH_CREDENTIALS=test-token
-      - CHROMA_SERVER_AUTH_TOKEN_TRANSPORT_HEADER=X-Chroma-Token
     volumes:
       - chromadb_data:/chroma/chroma
     ports:
       - "8000:8000"
     networks:
       - ai_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/heartbeat"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     restart: unless-stopped
 
-  # Ollama Local AI with DeepSeek
-  ollama:
-    image: ollama/ollama:latest
-    container_name: intelligent_crawl4ai_ollama
-    volumes:
-      - ollama_data:/root/.ollama
-    ports:
-      - "11434:11434"
-    networks:
-      - ai_network
-    environment:
-      - OLLAMA_FLASH_ATTENTION=1
-      - OLLAMA_NUM_PARALLEL=4
-      - OLLAMA_MAX_LOADED_MODELS=3
-      - OLLAMA_HOST=0.0.0.0
-      - OLLAMA_PRIMARY_MODEL=deepseek-coder:1.3b
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
-        limits:
-          memory: 8G
-          cpus: '4.0'
-    restart: unless-stopped
-
-  # Redis for task queuing and session management
+  # Redis for session management
   redis:
     image: redis:7-alpine
     container_name: intelligent_crawl4ai_redis
@@ -62,11 +26,6 @@ services:
       - redis_data:/data
     networks:
       - ai_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     restart: unless-stopped
 
   # PostgreSQL for persistent data storage
@@ -85,11 +44,6 @@ services:
       - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01-init.sql
     networks:
       - ai_network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U scraper_user -d intelligent_scraping"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     restart: unless-stopped
 
   # Browser Pool 1 - Primary
@@ -111,11 +65,6 @@ services:
     shm_size: 2gb
     networks:
       - ai_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/json/version"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     restart: unless-stopped
 
   # Browser Pool 2 - Secondary
@@ -137,52 +86,45 @@ services:
     shm_size: 2gb
     networks:
       - ai_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/json/version"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     restart: unless-stopped
 
-  # Main Intelligence Agent
-  intelligent-agent:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.agent
-    container_name: intelligent_crawl4ai_agent
+  # 🌐 Web UI Server - Uses Local Ollama
+  web-ui:
+    image: python:3.11-slim
+    command: >
+      bash -c "apt-get update && apt-get install -y curl && pip install -r requirements.txt && python web_ui_server.py"
+    container_name: intelligent_crawl4ai_web_ui
+    working_dir: /app
     environment:
-      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_URL=http://host.docker.internal:11434  # ← Points to local Ollama
       - OLLAMA_MODEL=deepseek-coder:1.3b
       - CHROMADB_URL=http://chromadb:8000
       - REDIS_URL=redis://redis:6379
       - POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
+      - DATABASE_TYPE=postgresql  # Using PostgreSQL now
       - BROWSER_POOL_URLS=http://browser-pool-1:3000,http://browser-pool-2:3000
+      - WEB_HOST=0.0.0.0
+      - WEB_PORT=8888
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
     volumes:
       - ./src:/app/src
-      - ./config:/app/config
-      - intelligent_agent_data:/app/data
+      - ./static:/app/static
+      - ./data:/app/data
+      - ./web_ui_server.py:/app/web_ui_server.py
+      - ./requirements.txt:/app/requirements.txt
     depends_on:
-      chromadb:
-        condition: service_healthy
-      ollama:
-        condition: service_started
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      model-manager:
-        condition: service_completed_successfully
+      - chromadb
+      - redis
+      - postgres
+      - browser-pool-1
+      - browser-pool-2
     networks:
       - ai_network
     ports:
-      - "8811:8811"  # MCP server port
-    deploy:
-      resources:
-        limits:
-          memory: 4G
-          cpus: '2.0'
+      - "8888:8888"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # ← Allows access to local Ollama
     restart: unless-stopped
 
   # High-Volume Worker Pool
@@ -193,7 +135,7 @@ services:
     environment:
       - REDIS_URL=redis://redis:6379
       - POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
-      - OLLAMA_URL=http://ollama:11434
+      - OLLAMA_URL=http://host.docker.internal:11434  # ← Points to local Ollama
       - OLLAMA_MODEL=deepseek-coder:1.3b
       - CHROMADB_URL=http://chromadb:8000
       - BROWSER_POOL_URLS=http://browser-pool-1:3000,http://browser-pool-2:3000
@@ -204,17 +146,14 @@ services:
       - ./src:/app/src
       - high_volume_data:/app/data
     depends_on:
-      - intelligent-agent
       - redis
       - postgres
     networks:
       - ai_network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # ← Allows access to local Ollama
     deploy:
       replicas: 2
-      resources:
-        limits:
-          memory: 6G
-          cpus: '4.0'
     restart: unless-stopped
 
   # Monitoring - Prometheus
@@ -224,8 +163,6 @@ services:
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
-      - '--web.console.libraries=/etc/prometheus/console_libraries'
-      - '--web.console.templates=/etc/prometheus/consoles'
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
     volumes:
@@ -244,7 +181,6 @@ services:
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin123
       - GF_USERS_ALLOW_SIGN_UP=false
-      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
     volumes:
       - grafana_data:/var/lib/grafana
       - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
@@ -270,90 +206,16 @@ services:
       - browser-pool-2
     networks:
       - ai_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
     restart: unless-stopped
-
-  # 🌐 Web UI Server - ChatGPT-like Interface with DeepSeek
-  web-ui:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.web-ui
-    container_name: intelligent_crawl4ai_web_ui
-    environment:
-      - OLLAMA_URL=http://ollama:11434
-      - OLLAMA_MODEL=deepseek-coder:1.3b
-      - CHROMADB_URL=http://chromadb:8000
-      - REDIS_URL=redis://redis:6379
-      - POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
-      - BROWSER_POOL_URLS=http://browser-pool-1:3000,http://browser-pool-2:3000
-      - WEB_HOST=0.0.0.0
-      - WEB_PORT=8888
-      - PYTHONUNBUFFERED=1
-      - LOG_LEVEL=INFO
-    volumes:
-      - ./src:/app/src
-      - ./static:/app/static
-      - web_ui_data:/app/data
-    depends_on:
-      chromadb:
-        condition: service_healthy
-      ollama:
-        condition: service_started
-      redis:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      model-manager:
-        condition: service_completed_successfully
-    networks:
-      - ai_network
-    ports:
-      - "8888:8888"  # Web UI accessible at http://localhost:8888
-    deploy:
-      resources:
-        limits:
-          memory: 2G
-          cpus: '1.0'
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-
-  # 🧠 DeepSeek Model Manager - Downloads and configures models
-  model-manager:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.model-manager
-    container_name: intelligent_crawl4ai_model_manager
-    environment:
-      - OLLAMA_URL=http://ollama:11434
-    depends_on:
-      ollama:
-        condition: service_started
-    networks:
-      - ai_network
-    restart: "no"  # Run once to setup models
 
 volumes:
   chromadb_data:
-    driver: local
-  ollama_data:
     driver: local
   redis_data:
     driver: local
   postgres_data:
     driver: local
-  intelligent_agent_data:
-    driver: local
   high_volume_data:
-    driver: local
-  web_ui_data:
     driver: local
   prometheus_data:
     driver: local
@@ -363,13 +225,3 @@ volumes:
 networks:
   ai_network:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-
-# Health check and monitoring configuration
-x-healthcheck-defaults: &healthcheck-defaults
-  interval: 30s
-  timeout: 10s
-  retries: 3
-  start_period: 60s
