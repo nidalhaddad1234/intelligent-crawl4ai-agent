@@ -63,7 +63,7 @@ class AIPlanner:
     
     def __init__(self, 
                  local_ai_url: str = "http://localhost:11434",
-                 local_model: str = "deepseek",
+                 local_model: str = "deepseek-coder:1.3b",
                  teacher_ai_url: Optional[str] = None,
                  confidence_threshold: float = 0.7):
         """
