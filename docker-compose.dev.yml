@@ -1,5 +1,5 @@
 services:
-  # ChromaDB Vector Database
+  # Minimal dev setup with hot reload
   chromadb:
     image: chromadb/chroma:0.6.3
     container_name: intelligent_crawl4ai_chromadb
@@ -11,11 +11,8 @@ services:
       - chromadb_data:/chroma/chroma
     ports:
       - "8000:8000"
-    networks:
-      - ai_network
     restart: unless-stopped
 
-  # Redis for session management
   redis:
     image: redis:7-alpine
     container_name: intelligent_crawl4ai_redis
@@ -24,11 +21,8 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    networks:
-      - ai_network
     restart: unless-stopped
 
-  # Browser Pool - REQUIRED for web scraping
   browser-pool:
     image: browserless/chrome:latest
     container_name: intelligent_crawl4ai_browser
@@ -45,50 +39,46 @@ services:
       - DEFAULT_IGNORE_HTTPS_ERRORS=true
       - DEFAULT_STEALTH=true
     shm_size: 1gb
-    networks:
-      - ai_network
     restart: unless-stopped
 
-  # 🌐 Web UI Server - Uses Local Ollama
+  # Web UI with HOT RELOAD - no restart needed!
   web-ui:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.web-ui
+    image: python:3.11-slim
     container_name: intelligent_crawl4ai_web_ui
+    working_dir: /app
+    # This command includes --reload flag for hot reloading
+    command: >
+      bash -c "
+      apt-get update && apt-get install -y curl &&
+      pip install -r requirements.txt &&
+      echo 'Starting with hot reload enabled...' &&
+      uvicorn web_ui_server:app --host 0.0.0.0 --port 8888 --reload --reload-dir /app"
     environment:
-      - OLLAMA_URL=http://host.docker.internal:11434  # ← Points to local Ollama
+      - OLLAMA_URL=http://host.docker.internal:11434
       - OLLAMA_MODEL=deepseek-coder:1.3b
       - CHROMADB_URL=http://chromadb:8000
       - REDIS_URL=redis://redis:6379
       - DATABASE_TYPE=sqlite
+      - BROWSER_POOL_URLS=http://browser-pool:3000
       - WEB_HOST=0.0.0.0
       - WEB_PORT=8888
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
-      - BROWSER_POOL_URLS=http://browser-pool:3000
     volumes:
-      - ./src:/app/src
-      - ./static:/app/static
-      - ./data:/app/data
-      - ./web_ui_server.py:/app/web_ui_server.py  # Mount for live updates
+      # All your code is mounted - changes are instant!
+      - ./:/app
+      - /app/.git  # Exclude .git directory
+      - /app/venv  # Exclude venv if present
+      - /app/node_modules  # Exclude node_modules
+    ports:
+      - "8888:8888"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - chromadb
       - redis
       - browser-pool
-    networks:
-      - ai_network
-    ports:
-      - "8888:8888"
-    extra_hosts:
-      - "host.docker.internal:host-gateway"  # ← Allows access to local Ollama
-    restart: unless-stopped
 
 volumes:
   chromadb_data:
-    driver: local
   redis_data:
-    driver: local
-
-networks:
-  ai_network:
-    driver: bridge

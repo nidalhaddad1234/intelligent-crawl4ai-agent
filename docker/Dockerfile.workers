@@ -1,4 +1,4 @@
-# Dockerfile for Web UI Server
+# Dockerfile for High-Volume Workers
 FROM python:3.11-slim
 
 # Set working directory
@@ -15,8 +15,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY src/ /app/src/
-COPY web_ui_server.py /app/
-COPY static/ /app/static/
 
 # Create necessary directories
 RUN mkdir -p /app/logs /app/data
@@ -24,15 +22,6 @@ RUN mkdir -p /app/logs /app/data
 # Set environment variables
 ENV PYTHONPATH="/app:/app/src"
 ENV PYTHONUNBUFFERED=1
-ENV WEB_HOST=0.0.0.0
-ENV WEB_PORT=8888
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:8888/health || exit 1
-
-# Expose port
-EXPOSE 8888
-
-# Run the web UI server
-CMD ["python", "web_ui_server.py"]
+# Run the high-volume worker
+CMD ["python", "-m", "src.agents.high_volume_executor"]
