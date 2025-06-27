@@ -149,40 +149,43 @@ class AIPlanner:
     
     def _build_planning_prompt(self, request: str, tools: Dict[str, Any]) -> str:
         """Build the prompt for AI planning"""
-        return f"""You are an AI planner that creates execution plans for web scraping and data extraction tasks.
+        # Create a simplified tool list
+        tool_summary = []
+        for tool in tools["tools"]:
+            params = [p["name"] for p in tool["parameters"] if p["required"]]
+            tool_summary.append(f"- {tool['name']}: {tool['description']} (params: {', '.join(params)})")
+        
+        return f"""You are an AI that creates step-by-step plans.
 
-User Request: {request}
+User wants: {request}
 
-Available Tools:
-{json.dumps(tools, indent=2)}
+Available tools:
+{chr(10).join(tool_summary)}
 
-Create a detailed execution plan that:
-1. Breaks down the request into logical steps
-2. Uses the appropriate tools for each step
-3. Handles potential errors gracefully
-4. Optimizes for efficiency and reliability
+Analyze the request and create a plan. Return ONLY valid JSON:
 
-Return a JSON object with this structure:
 {{
-    "description": "Brief description of the plan",
-    "confidence": 0.0-1.0,
-    "steps": [
-        {{
-            "step_id": 1,
-            "tool": "tool_name",
-            "description": "What this step does",
-            "parameters": {{}},
-            "depends_on": [],
-            "error_handling": "retry|fallback|fail"
-        }}
-    ]
+  "description": "what the plan does",
+  "confidence": 0.8,
+  "steps": [
+    {{
+      "step_id": 1,
+      "tool": "exact_tool_name",
+      "description": "what this step does",
+      "parameters": {{"param1": "value1"}},
+      "depends_on": [],
+      "error_handling": "retry"
+    }}
+  ]
 }}
 
-Important:
-- Use exact tool names from the available tools
-- Ensure parameters match the tool requirements
-- Steps can depend on previous steps using depends_on
-- Consider parallel execution where possible
+Rules:
+- If request mentions "analyze", use analyze_content tool
+- If request mentions "export" or "CSV", use export_csv tool
+- If request mentions "Excel", use export_excel tool
+- If request mentions "compare", use compare_datasets tool
+- If request mentions "pattern" or "anomaly", use detect_patterns tool
+- Only use tools that exist in the list above
 """
     
     def _parse_plan_response(self, plan_data: Dict[str, Any], request: str) -> ExecutionPlan:
