@@ -1,0 +1,157 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      version:
+        description: 'Version to deploy (leave empty for latest)'
+        required: false
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  pre-deployment-checks:
+    name: Pre-deployment Checks
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Determine version
+        id: version
+        run: |
+          if [ -z "${{ github.event.inputs.version }}" ]; then
+            VERSION=$(git describe --tags --abbrev=0 2>/dev/null || echo "latest")
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Deploying version: $VERSION"
+          
+      - name: Check if images exist
+        run: |
+          for image in web-ui agent workers; do
+            echo "Checking ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${image}:${{ steps.version.outputs.version }}"
+            docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}-${image}:${{ steps.version.outputs.version }} || exit 1
+          done
+
+  deploy-staging:
+    name: Deploy to Staging
+    needs: pre-deployment-checks
+    if: github.event.inputs.environment == 'staging'
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.intelligent-crawl4ai.example.com
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Deploy to staging
+        run: |
+          echo "Deploying version ${{ needs.pre-deployment-checks.outputs.version }} to staging"
+          
+          # Here you would add your actual deployment commands
+          # For example, using SSH to deploy to a server:
+          # - Set up SSH key
+          # - Copy docker-compose file
+          # - Pull new images
+          # - Restart services
+          
+          echo "Deployment to staging completed!"
+          
+      - name: Run smoke tests
+        run: |
+          echo "Running smoke tests on staging..."
+          # Add smoke test commands here
+          # curl -f https://staging.intelligent-crawl4ai.example.com/health
+          
+      - name: Notify deployment
+        run: |
+          echo "🚀 Deployed version ${{ needs.pre-deployment-checks.outputs.version }} to staging environment"
+
+  deploy-production:
+    name: Deploy to Production
+    needs: pre-deployment-checks
+    if: github.event.inputs.environment == 'production'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://intelligent-crawl4ai.example.com
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Create deployment backup
+        run: |
+          echo "Creating backup of current production deployment..."
+          # Add backup commands here
+          
+      - name: Deploy to production
+        run: |
+          echo "Deploying version ${{ needs.pre-deployment-checks.outputs.version }} to production"
+          
+          # Production deployment commands
+          # - Blue-green deployment
+          # - Database migrations
+          # - Cache warming
+          # - Service restart
+          
+          echo "Deployment to production completed!"
+          
+      - name: Verify deployment
+        run: |
+          echo "Verifying production deployment..."
+          # Health checks
+          # API tests
+          # Performance checks
+          
+      - name: Create rollback plan
+        run: |
+          echo "Rollback command: ./rollback.sh ${{ needs.pre-deployment-checks.outputs.version }}"
+          
+      - name: Notify deployment
+        run: |
+          echo "🎉 Successfully deployed version ${{ needs.pre-deployment-checks.outputs.version }} to production!"
+
+  post-deployment:
+    name: Post-deployment Tasks
+    needs: [deploy-staging, deploy-production]
+    if: always()
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Update deployment record
+        run: |
+          echo "Recording deployment:"
+          echo "- Environment: ${{ github.event.inputs.environment }}"
+          echo "- Version: ${{ needs.pre-deployment-checks.outputs.version }}"
+          echo "- Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "- Deployed by: ${{ github.actor }}"
+          
+      - name: Clear CDN cache
+        if: github.event.inputs.environment == 'production'
+        run: |
+          echo "Clearing CDN cache..."
+          # Add CDN cache clearing commands
+          
+      - name: Update monitoring
+        run: |
+          echo "Updating monitoring dashboards..."
+          # Update Grafana annotations
+          # Update status page

@@ -1,514 +1,365 @@
-# Configuration Guide
+# Configuration Guide - AI-First System
 
 ## Overview
 
-The Intelligent Crawl4AI Agent is highly configurable to support various deployment scenarios, from local development to high-volume production environments. This guide covers all configuration options and best practices.
+The AI-First system requires minimal configuration. Most settings are automatically optimized by the AI based on your usage patterns.
 
-## Table of Contents
+## Basic Configuration
 
-- [Environment Variables](#environment-variables)
-- [Claude Desktop Configuration](#claude-desktop-configuration)
-- [Docker Configuration](#docker-configuration)
-- [Database Configuration](#database-configuration)
-- [AI Services Configuration](#ai-services-configuration)
-- [Strategy Configuration](#strategy-configuration)
-- [Performance Tuning](#performance-tuning)
-- [Security Configuration](#security-configuration)
-- [Monitoring Configuration](#monitoring-configuration)
-
-## Environment Variables
-
-### Core Application Settings
+### Minimal Setup (.env)
+Create a `.env` file with just these essentials:
 
 ```bash
-# Application Environment
-APP_ENV=production                    # production, development, testing
-LOG_LEVEL=INFO                       # DEBUG, INFO, WARNING, ERROR
-DEBUG_MODE=false                     # Enable debug features
-PYTHONUNBUFFERED=1                   # Python output buffering
+# AI Model Selection
+AI_MODEL=deepseek-coder:1.3b
 
-# Server Configuration
-MCP_SERVER_HOST=0.0.0.0             # MCP server bind address
-MCP_SERVER_PORT=8811                # MCP server port
-MCP_TIMEOUT=300                     # Request timeout in seconds
-MAX_CONCURRENT_REQUESTS=100         # Max concurrent requests
-RATE_LIMIT_PER_MINUTE=1000         # Rate limiting
+# Web Interface Port
+WEB_PORT=8888
 ```
 
-### Database Configuration
+That's it! The system handles everything else automatically.
 
-#### SQLite (Default for Standalone)
+## Configuration Options
+
+### AI Settings
+
 ```bash
-DATABASE_TYPE=sqlite                 # sqlite, postgresql, auto
-SQLITE_PATH=/app/data/sqlite/intelligent_agent.db
-SQLITE_POOL_SIZE=20                 # Connection pool size
-SQLITE_TIMEOUT=30                   # Query timeout
+# Model Selection (choose based on your hardware)
+AI_MODEL=phi3:mini              # Fastest, 2GB RAM
+AI_MODEL=deepseek-coder:1.3b    # Balanced (default), 3GB RAM
+AI_MODEL=llama3.2:3b            # Better understanding, 4GB RAM
+AI_MODEL=mistral:7b             # Best quality, 8GB RAM
+
+# AI Server
+OLLAMA_URL=http://localhost:11434  # Default Ollama location
+
+# Planning
+PLAN_CONFIDENCE_THRESHOLD=0.3   # Minimum confidence to execute (0.0-1.0)
+PLAN_CACHE_SIZE=1000           # Cache frequent plans for speed
 ```
 
-#### PostgreSQL (Recommended for Production)
+### Learning System
+
 ```bash
-DATABASE_TYPE=postgresql
-POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
-POSTGRES_POOL_MIN=5                 # Minimum connections
-POSTGRES_POOL_MAX=50                # Maximum connections
-POSTGRES_TIMEOUT=60                 # Connection timeout
+# Enable/Disable Learning
+LEARNING_ENABLED=true          # Let AI learn from usage
+
+# Learning Parameters
+LEARNING_THRESHOLD=0.7         # Minimum confidence to learn pattern
+PATTERN_RETENTION_DAYS=90      # How long to keep patterns
+TEACHER_MODE=false            # Enable Claude teacher for improvements
+
+# Vector Database
+CHROMADB_URL=http://localhost:8000  # ChromaDB for pattern storage
 ```
 
-### AI Services Configuration
+### Performance Tuning
 
-#### Ollama Settings
 ```bash
-OLLAMA_URL=http://localhost:11434    # Ollama API endpoint
-OLLAMA_MODEL_LLM=llama3.1           # Primary LLM model
-OLLAMA_MODEL_EMBEDDING=nomic-embed-text  # Embedding model
-OLLAMA_TIMEOUT=120                  # Request timeout
-OLLAMA_MAX_RETRIES=3                # Retry attempts
-OLLAMA_CONCURRENT_REQUESTS=10       # Max concurrent requests
+# Execution
+MAX_WORKERS=10                 # Parallel tool executions
+TOOL_TIMEOUT=30               # Seconds before tool timeout
+BATCH_SIZE=50                 # Default batch size for bulk ops
+
+# Resource Limits
+MAX_MEMORY_MB=4096            # Memory limit for operations
+MAX_URLS_PER_REQUEST=1000     # Safety limit
 ```
 
-#### ChromaDB Settings
-```bash
-CHROMADB_URL=http://localhost:8000   # ChromaDB endpoint
-CHROMADB_TOKEN=test-token           # Authentication token
-CHROMADB_COLLECTION_PREFIX=intelligent_agent  # Collection naming
-CHROMADB_MAX_BATCH_SIZE=100         # Batch insert size
-CHROMADB_TIMEOUT=60                 # Query timeout
-```
-
-### Browser and Scraping Configuration
+### Web Interface
 
 ```bash
-# Browser Settings
-BROWSER_HEADLESS=true               # Run browsers headless
-BROWSER_TIMEOUT=30000              # Page load timeout (ms)
-MAX_BROWSER_INSTANCES=20           # Max concurrent browsers
-BROWSER_POOL_URLS=http://browser-pool-1:3000,http://browser-pool-2:3000
-
-# Scraping Limits
-MAX_WORKERS=50                     # High-volume workers
-MAX_CONCURRENT_PER_WORKER=10       # URLs per worker
-DEFAULT_REQUEST_DELAY=1.0          # Delay between requests
-MAX_RETRIES=3                      # Failed request retries
-```
-
-### Cache and Queue Configuration
-
-```bash
-# Redis Configuration
-REDIS_URL=redis://localhost:6379    # Redis connection
-REDIS_MAX_CONNECTIONS=100          # Connection pool size
-CACHE_TTL=3600                     # Cache time-to-live
-QUEUE_BATCH_SIZE=100               # Job batch size
+# Server Settings
+WEB_HOST=0.0.0.0             # Listen on all interfaces
+WEB_PORT=8888                # Port number
+WEB_WORKERS=4                # Async workers
 
 # Session Management
-SESSION_TIMEOUT=1800               # Session timeout (seconds)
-SESSION_CLEANUP_INTERVAL=300      # Cleanup interval
+SESSION_TIMEOUT_MINUTES=60    # Session expiry
+MAX_SESSIONS=100             # Concurrent sessions
 ```
 
-## Claude Desktop Configuration
+### Database
 
-### Basic Configuration
+```bash
+# Database Selection (auto-configured)
+DATABASE_TYPE=sqlite          # Default, no setup needed
+DATABASE_URL=sqlite:///data/scraping.db
 
-Create or update `~/.config/Claude Desktop/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "intelligent_crawl4ai_agent": {
-      "command": "python",
-      "args": ["/path/to/intelligent-crawl4ai-agent/src/mcp_servers/intelligent_orchestrator.py"],
-      "env": {
-        "OLLAMA_URL": "http://localhost:11434",
-        "CHROMADB_URL": "http://localhost:8000",
-        "REDIS_URL": "redis://localhost:6379",
-        "LOG_LEVEL": "INFO"
-      }
-    }
-  }
-}
+# Or for production:
+DATABASE_TYPE=postgresql
+DATABASE_URL=postgresql://user:pass@localhost:5432/dbname
 ```
 
-### Advanced Configuration
+### Development/Debug
 
-For production deployments with custom settings:
+```bash
+# Debug Mode
+DEBUG=false                   # Production mode
+LOG_LEVEL=INFO               # INFO, DEBUG, WARNING, ERROR
 
-```json
-{
-  "mcpServers": {
-    "intelligent_crawl4ai_agent": {
-      "command": "python",
-      "args": ["/path/to/intelligent-crawl4ai-agent/src/mcp_servers/intelligent_orchestrator.py"],
-      "env": {
-        "OLLAMA_URL": "http://localhost:11434",
-        "CHROMADB_URL": "http://localhost:8000",
-        "REDIS_URL": "redis://localhost:6379",
-        "POSTGRES_URL": "postgresql://user:pass@localhost:5432/scraping",
-        "LOG_LEVEL": "INFO",
-        "MAX_CONCURRENT_REQUESTS": "50",
-        "RATE_LIMIT_PER_MINUTE": "500",
-        "ENABLE_METRICS": "true",
-        "BROWSER_POOL_URLS": "http://localhost:3001,http://localhost:3002"
-      },
-      "timeout": 300000,
-      "retries": 3
-    }
-  }
-}
+# Development Features
+HOT_RELOAD=true              # Auto-reload on code changes
+PROFILE_TOOLS=true           # Performance profiling
+```
+
+## Model Selection Guide
+
+### Hardware Requirements
+
+| Model | RAM | GPU | Speed | Quality |
+|-------|-----|-----|-------|---------|
+| phi3:mini | 2GB | Optional | ⚡⚡⚡⚡⚡ | ⭐⭐⭐ |
+| deepseek-coder:1.3b | 3GB | Optional | ⚡⚡⚡⚡ | ⭐⭐⭐⭐ |
+| llama3.2:3b | 4GB | Recommended | ⚡⚡⚡ | ⭐⭐⭐⭐ |
+| mistral:7b | 8GB | Recommended | ⚡⚡ | ⭐⭐⭐⭐⭐ |
+
+### Choosing the Right Model
+
+**For Fast Responses (phi3:mini)**:
+- Quick extractions
+- Simple requests
+- High-volume processing
+- Limited hardware
+
+**For Balanced Performance (deepseek-coder:1.3b)**:
+- General web scraping
+- Most use cases
+- Good accuracy
+- **Recommended default**
+
+**For Complex Understanding (llama3.2:3b)**:
+- Complex websites
+- Nuanced requests
+- Better context understanding
+- Multi-step operations
+
+**For Best Quality (mistral:7b)**:
+- Mission-critical data
+- Complex analysis
+- Best understanding
+- Requires good hardware
+
+## Environment-Specific Configs
+
+### Development
+```bash
+# .env.development
+AI_MODEL=phi3:mini           # Fast iteration
+DEBUG=true
+LOG_LEVEL=DEBUG
+LEARNING_ENABLED=false       # Disable for testing
+HOT_RELOAD=true
+```
+
+### Production
+```bash
+# .env.production
+AI_MODEL=deepseek-coder:1.3b
+DEBUG=false
+LOG_LEVEL=WARNING
+LEARNING_ENABLED=true
+DATABASE_TYPE=postgresql
+MAX_WORKERS=50
+```
+
+### Testing
+```bash
+# .env.test
+AI_MODEL=phi3:mini          # Fast tests
+DATABASE_URL=sqlite:///:memory:
+LEARNING_ENABLED=false
+MAX_WORKERS=2
 ```
 
 ## Docker Configuration
 
-### Environment File Setup
-
-Create `.env` file in project root:
-
-```bash
-# Copy from template
-cp .env.example .env
-
-# Edit with your settings
-nano .env
-```
-
-### Docker Compose Overrides
-
-For custom deployments, create `docker-compose.override.yml`:
-
+### docker-compose.yml Override
 ```yaml
-version: '3.9'
-
+version: '3.8'
 services:
-  intelligent-agent:
+  web-ui:
     environment:
-      - MAX_WORKERS=100
-      - LOG_LEVEL=DEBUG
-    deploy:
-      resources:
-        limits:
-          memory: 8G
-          cpus: '4.0'
-
-  ollama:
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: 1
-              capabilities: [gpu]
+      - AI_MODEL=deepseek-coder:1.3b
+      - LEARNING_ENABLED=true
+      - MAX_WORKERS=20
 ```
 
-### Production Docker Settings
-
+### Resource Limits
 ```yaml
-# Production optimizations
 services:
-  intelligent-agent:
-    restart: always
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+  web-ui:
     deploy:
       resources:
         limits:
-          memory: 4G
-          cpus: '2.0'
+          cpus: '4'
+          memory: 8G
         reservations:
-          memory: 2G
-          cpus: '1.0'
+          cpus: '2'
+          memory: 4G
 ```
 
-## Strategy Configuration
+## Advanced Configuration
 
-### Default Strategy Settings
+### Custom Tool Timeout
+```python
+# In your .env
+TOOL_TIMEOUTS_JSON={"crawler": 60, "analyzer": 30, "exporter": 10}
+```
 
+### GPU Acceleration
 ```bash
-# Strategy Selection
-DEFAULT_STRATEGY=smart_hybrid        # Default extraction strategy
-STRATEGY_CONFIDENCE_THRESHOLD=0.7   # Minimum confidence required
-ENABLE_STRATEGY_LEARNING=true       # Learn from results
-ENABLE_REGEX_FAST_MODE=true         # Fast regex extraction
-
-# Strategy Timeouts
-CSS_STRATEGY_TIMEOUT=15             # CSS extraction timeout
-LLM_STRATEGY_TIMEOUT=60             # LLM extraction timeout
-HYBRID_STRATEGY_TIMEOUT=45          # Hybrid strategy timeout
+# For NVIDIA GPUs
+OLLAMA_NUM_GPU=1            # Number of GPUs to use
+CUDA_VISIBLE_DEVICES=0      # Which GPU to use
 ```
 
-### Custom Strategy Configuration
-
-Create `config/strategies.json`:
-
-```json
-{
-  "custom_strategies": {
-    "linkedin_profile": {
-      "strategy_type": "css",
-      "selectors": {
-        "name": "h1.text-heading-xlarge",
-        "title": ".text-body-medium.break-words",
-        "company": ".inline-show-more-text"
-      },
-      "confidence_threshold": 0.8
-    },
-    "ecommerce_products": {
-      "strategy_type": "hybrid",
-      "css_selectors": {
-        "title": ".product-title, h1",
-        "price": ".price, .cost"
-      },
-      "llm_fallback": true,
-      "confidence_threshold": 0.7
-    }
-  }
-}
-```
-
-## Performance Tuning
-
-### High-Volume Configuration
-
-For processing thousands of URLs:
-
+### Proxy Configuration
 ```bash
-# Worker Configuration
-MAX_WORKERS=100                     # Increase workers
-MAX_CONCURRENT_PER_WORKER=20       # URLs per worker
-WORKER_BATCH_SIZE=200              # Batch size
-
-# Database Optimization
-POSTGRES_POOL_MAX=100              # Increase DB pool
-REDIS_MAX_CONNECTIONS=200          # Increase Redis pool
-
-# Browser Optimization
-MAX_BROWSER_INSTANCES=50           # More browsers
-BROWSER_TIMEOUT=20000              # Faster timeout
+# For web scraping through proxy
+HTTP_PROXY=http://proxy.example.com:8080
+HTTPS_PROXY=http://proxy.example.com:8080
+NO_PROXY=localhost,127.0.0.1
 ```
 
-### Memory Optimization
+## Configuration Best Practices
 
+### 1. Start Simple
+Begin with minimal configuration and add settings only when needed.
+
+### 2. Monitor Performance
 ```bash
-# Memory Limits
-MAX_MEMORY_PER_WORKER=512M         # Worker memory limit
-GARBAGE_COLLECTION_INTERVAL=100    # GC frequency
-CACHE_MAX_SIZE=1000                # Cache size limit
+# Check system stats
+curl http://localhost:8888/api/system/status
 
-# Database Connection Pooling
-DB_POOL_RECYCLE=3600              # Recycle connections
-DB_POOL_PRE_PING=true             # Validate connections
+# View tool performance
+curl http://localhost:8888/api/tools/insights
 ```
 
-### Network Optimization
+### 3. Adjust Based on Usage
+Let the system run for a few days, then optimize based on:
+- Response times
+- Memory usage
+- Success rates
+- Common request types
 
+### 4. Use Environment Files
 ```bash
-# Connection Settings
-HTTP_TIMEOUT=30                    # HTTP request timeout
-HTTP_MAX_CONNECTIONS=100           # Max HTTP connections
-HTTP_KEEPALIVE=true               # Keep connections alive
-
-# Rate Limiting
-GLOBAL_RATE_LIMIT=1000            # Global requests/minute
-PER_DOMAIN_RATE_LIMIT=60          # Per domain limit
-RATE_LIMIT_BURST=20               # Burst allowance
-```
-
-## Security Configuration
-
-### Authentication Settings
-
-```bash
-# API Security
-API_KEY_REQUIRED=true              # Require API keys
-API_KEY_HEADER=X-API-Key           # Header name
-JWT_SECRET_KEY=your-secret-key     # JWT signing key
-JWT_EXPIRATION=3600                # Token expiration
-
-# CORS Configuration
-CORS_ORIGINS=["http://localhost:3000"]  # Allowed origins
-CORS_CREDENTIALS=true              # Allow credentials
-```
-
-### Data Protection
-
-```bash
-# Encryption
-ENCRYPT_SENSITIVE_DATA=true        # Encrypt credentials
-ENCRYPTION_KEY=your-encryption-key # Data encryption key
-
-# Data Retention
-DATA_RETENTION_DAYS=30             # Keep data for days
-AUTO_CLEANUP_ENABLED=true          # Automatic cleanup
-ANONYMIZE_LOGS=true                # Remove sensitive info
-```
-
-## Monitoring Configuration
-
-### Metrics and Logging
-
-```bash
-# Metrics
-ENABLE_METRICS=true                # Enable Prometheus metrics
-METRICS_PORT=8812                  # Metrics endpoint port
-METRICS_PATH=/metrics              # Metrics URL path
-
-# Logging
-LOG_FORMAT=json                    # Log format (json, text)
-LOG_FILE=/app/logs/agent.log       # Log file path
-LOG_ROTATION=true                  # Enable log rotation
-LOG_MAX_SIZE=100MB                 # Max log file size
-```
-
-### Health Checks
-
-```bash
-# Health Check Configuration
-HEALTH_CHECK_ENABLED=true          # Enable health checks
-HEALTH_CHECK_INTERVAL=30           # Check interval (seconds)
-HEALTH_CHECK_TIMEOUT=10            # Check timeout
-HEALTH_CHECK_ENDPOINT=/health      # Health check URL
-```
-
-### Monitoring Integrations
-
-```bash
-# Prometheus
-PROMETHEUS_ENABLED=true
-PROMETHEUS_PORT=9090
-PROMETHEUS_RETENTION=15d
-
-# Grafana
-GRAFANA_ENABLED=true
-GRAFANA_PORT=3000
-GRAFANA_ADMIN_PASSWORD=secure_password
-
-# Alerting
-ALERT_WEBHOOK_URL=https://hooks.slack.com/...
-ALERT_ON_ERROR_RATE=0.1           # Alert if error rate > 10%
-ALERT_ON_MEMORY_USAGE=0.8         # Alert if memory > 80%
-```
-
-## Configuration Examples
-
-### Development Environment
-
-```bash
-# .env.development
-APP_ENV=development
-LOG_LEVEL=DEBUG
-DEBUG_MODE=true
-MAX_WORKERS=5
-ENABLE_METRICS=false
-BROWSER_HEADLESS=false
-```
-
-### Testing Environment
-
-```bash
-# .env.testing
-APP_ENV=testing
-LOG_LEVEL=WARNING
-DATABASE_TYPE=sqlite
-SQLITE_PATH=:memory:
-ENABLE_STRATEGY_LEARNING=false
-```
-
-### Production Environment
-
-```bash
-# .env.production
-APP_ENV=production
-LOG_LEVEL=INFO
-DATABASE_TYPE=postgresql
-MAX_WORKERS=100
-ENABLE_METRICS=true
-HEALTH_CHECK_ENABLED=true
-ENCRYPT_SENSITIVE_DATA=true
+# Load different configs
+python web_ui_server.py --env production
+python web_ui_server.py --env development
 ```
 
 ## Configuration Validation
 
-### Validation Script
+### Check Configuration
+```python
+# validate_config.py
+import os
+from dotenv import load_dotenv
 
-Use the included validation script:
+load_dotenv()
 
-```bash
-python scripts/validate_config.py --env-file .env
+# Required settings
+required = ['AI_MODEL', 'WEB_PORT']
+for setting in required:
+    if not os.getenv(setting):
+        print(f"ERROR: {setting} not set")
+
+# Validate model
+model = os.getenv('AI_MODEL')
+valid_models = ['phi3:mini', 'deepseek-coder:1.3b', 'llama3.2:3b', 'mistral:7b']
+if model not in valid_models:
+    print(f"WARNING: Unknown model {model}")
+
+print("Configuration valid!")
 ```
 
-### Required Settings Check
+## Dynamic Configuration
 
-Minimum required configuration:
+The AI system can suggest configuration changes:
 
-```bash
-# Essential settings that must be configured
-OLLAMA_URL          # AI service endpoint
-CHROMADB_URL        # Vector database
-DATABASE_TYPE       # Database choice
+```
+You: The system seems slow
+
+AI: I notice average response time is 5.2 seconds. I recommend:
+1. Switch to AI_MODEL=phi3:mini for 3x faster responses
+2. Increase PLAN_CACHE_SIZE=5000 to cache more plans
+3. Set MAX_WORKERS=20 for better parallelization
+
+Would you like me to show you how to update these settings?
 ```
 
-## Best Practices
+## Security Configuration
 
-### Security Best Practices
-
-1. **Never commit secrets** to version control
-2. **Use environment variables** for all sensitive data
-3. **Rotate API keys** regularly
-4. **Enable encryption** for production
-5. **Use least privilege** access
-
-### Performance Best Practices
-
-1. **Monitor resource usage** regularly
-2. **Tune worker counts** based on load
-3. **Use database pooling** for high volume
-4. **Enable caching** where appropriate
-5. **Set appropriate timeouts**
-
-### Operational Best Practices
-
-1. **Use configuration management** tools
-2. **Validate configuration** before deployment
-3. **Monitor configuration drift**
-4. **Document custom settings**
-5. **Test configuration changes**
-
-## Troubleshooting Configuration
-
-### Common Issues
-
-**Service Connection Failures**
+### API Security (Future)
 ```bash
-# Check service connectivity
-curl http://localhost:11434/api/tags        # Ollama
-curl http://localhost:8000/api/v1/heartbeat # ChromaDB
-redis-cli ping                              # Redis
+# API Authentication
+API_KEY_REQUIRED=true
+API_KEY=your-secret-key-here
+
+# Rate Limiting
+RATE_LIMIT_PER_MINUTE=100
+RATE_LIMIT_PER_HOUR=1000
 ```
 
-**Performance Issues**
+### Data Security
 ```bash
-# Check resource usage
-docker stats
-htop
-df -h
+# Encryption
+ENCRYPT_DATABASE=true
+ENCRYPTION_KEY=your-encryption-key
 
-# Adjust worker settings
-MAX_WORKERS=25  # Reduce if high CPU
-MAX_CONCURRENT_PER_WORKER=5  # Reduce if high memory
+# Data Retention
+AUTO_DELETE_AFTER_DAYS=30
+ANONYMIZE_LOGS=true
 ```
 
-**Memory Issues**
+## Monitoring Configuration
+
+### Metrics Export
 ```bash
-# Enable memory monitoring
-ENABLE_MEMORY_MONITORING=true
-MEMORY_WARNING_THRESHOLD=0.8
-MEMORY_CRITICAL_THRESHOLD=0.9
+# Prometheus metrics
+ENABLE_METRICS=true
+METRICS_PORT=9090
+
+# Grafana
+GRAFANA_URL=http://localhost:3000
+GRAFANA_API_KEY=your-key
 ```
 
-## Getting Help
+## Migration from v1.0
 
-- **Configuration Issues**: Check [troubleshooting.md](troubleshooting.md)
-- **Performance Tuning**: See [high_volume.md](high_volume.md)
-- **Strategy Configuration**: Read [strategies.md](strategies.md)
-- **API Documentation**: Review [api.md](api.md)
+If migrating from the old system, remove these obsolete settings:
+- ❌ `STRATEGY_SELECTION_MODE`
+- ❌ `CSS_STRATEGY_TIMEOUT`
+- ❌ `LLM_STRATEGY_MODEL`
+- ❌ `PLATFORM_STRATEGY_*`
+- ❌ `MCP_SERVER_*`
+
+## Troubleshooting Config Issues
+
+### Config Not Loading
+```bash
+# Check .env file location
+ls -la .env
+
+# Validate syntax
+python -c "from dotenv import load_dotenv; load_dotenv(); print('OK')"
+```
+
+### Wrong Model Loading
+```bash
+# List available models
+ollama list
+
+# Pull correct model
+ollama pull deepseek-coder:1.3b
+```
+
+## Summary
+
+The AI-First system is designed to work with minimal configuration. Start with just:
+- `AI_MODEL` - Choose based on your hardware
+- `WEB_PORT` - Where to access the UI
+
+Everything else is optional and can be tuned based on your specific needs. The AI will help optimize settings over time!

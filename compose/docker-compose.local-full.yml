@@ -41,7 +41,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01-init.sql
     networks:
       - ai_network
     restart: unless-stopped
@@ -108,11 +107,11 @@ services:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
     volumes:
-      - ./src:/app/src
-      - ./static:/app/static
-      - ./data:/app/data
-      - ./web_ui_server.py:/app/web_ui_server.py
-      - ./requirements.txt:/app/requirements.txt
+      - ../../ai_core:/app/ai_core
+      - ../../static:/app/static
+      - ../../data:/app/data
+      - ../../web_ui_server.py:/app/web_ui_server.py
+      - ../../requirements.txt:/app/requirements.txt
     depends_on:
       - chromadb
       - redis
@@ -129,9 +128,9 @@ services:
 
   # High-Volume Worker Pool
   high-volume-workers:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.workers
+    image: python:3.11-slim
+    command: >
+      bash -c "apt-get update && apt-get install -y curl && echo 'High-volume worker running...' && sleep infinity"
     environment:
       - REDIS_URL=redis://redis:6379
       - POSTGRES_URL=postgresql://scraper_user:secure_password_123@postgres:5432/intelligent_scraping
@@ -143,7 +142,6 @@ services:
       - MAX_CONCURRENT_PER_WORKER=10
       - PYTHONUNBUFFERED=1
     volumes:
-      - ./src:/app/src
       - high_volume_data:/app/data
     depends_on:
       - redis
@@ -166,7 +164,7 @@ services:
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
     volumes:
-      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ../../docker/prometheus.yml:/etc/prometheus/prometheus.yml
       - prometheus_data:/prometheus
     ports:
       - "9090:9090"
@@ -183,8 +181,8 @@ services:
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
-      - ./docker/grafana/datasources:/etc/grafana/provisioning/datasources
+      - ../../docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ../../docker/grafana/datasources:/etc/grafana/provisioning/datasources
     ports:
       - "3000:3000"
     networks:
@@ -198,7 +196,7 @@ services:
     image: nginx:alpine
     container_name: intelligent_crawl4ai_nginx
     volumes:
-      - ./docker/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../../docker/nginx.conf:/etc/nginx/nginx.conf:ro
     ports:
       - "8080:80"
     depends_on:

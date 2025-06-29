@@ -1,0 +1,17 @@
+services:
+  # Standalone Grafana for testing
+  grafana-test:
+    image: grafana/grafana:latest
+    container_name: grafana_test
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+    ports:
+      - "3003:3000"
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge

@@ -391,8 +391,8 @@
 <body>
     <div class="chat-container">
         <div class="header">
-            <h1>🤖 Intelligent Web Scraping Assistant</h1>
-            <p>AI-powered data extraction and website analysis</p>
+            <h1>🤖 AI-First Intelligent Web Scraping Assistant</h1>
+            <p>Just tell me what you want in plain English - I'll figure out how to do it!</p>
             <div class="status-indicator">
                 <div class="status-dot"></div>
                 <span id="status-text">Online</span>
@@ -401,29 +401,41 @@
 
         <div class="chat-messages" id="chatMessages">
             <div class="welcome-message">
-                <h2>Welcome to your intelligent scraping assistant!</h2>
-                <p>I can help you extract data from websites, analyze site structures, and manage large-scale scraping jobs.</p>
+                <h2>👋 Hi! I'm your AI-powered web scraping assistant!</h2>
+                <p>No coding needed - just tell me what data you want in plain English, and I'll handle everything!</p>
+                
+                <div style="background: #f0f7ff; padding: 20px; border-radius: 10px; margin: 20px 0;">
+                    <h3 style="color: #2563eb; margin-bottom: 15px;">✨ Try these example requests:</h3>
+                    <ul style="text-align: left; line-height: 1.8; color: #475569;">
+                        <li>"Extract all product prices from this e-commerce site"</li>
+                        <li>"Find contact information on this company website"</li>
+                        <li>"Get all the news headlines from this news site"</li>
+                        <li>"Compare prices of iPhone 15 across these shopping sites"</li>
+                        <li>"Extract table data from this page and save as Excel"</li>
+                        <li>"Monitor this page daily for price changes"</li>
+                    </ul>
+                </div>
                 
                 <div class="features">
                     <div class="feature">
+                        <div class="feature-icon">🧠</div>
+                        <h3>AI Understands You</h3>
+                        <p>Just describe what you want - no technical knowledge needed!</p>
+                    </div>
+                    <div class="feature">
                         <div class="feature-icon">🎯</div>
-                        <h3>Smart Scraping</h3>
-                        <p>AI-powered strategy selection for optimal data extraction</p>
+                        <h3>Smart Execution</h3>
+                        <p>AI figures out the best way to get your data</p>
                     </div>
                     <div class="feature">
-                        <div class="feature-icon">⚡</div>
-                        <h3>High Volume</h3>
-                        <p>Process thousands of URLs with distributed workers</p>
+                        <div class="feature-icon">📈</div>
+                        <h3>Self-Learning</h3>
+                        <p>Gets smarter with every request - learns what works!</p>
                     </div>
                     <div class="feature">
-                        <div class="feature-icon">🔍</div>
-                        <h3>Site Analysis</h3>
-                        <p>Analyze website structure and recommend strategies</p>
-                    </div>
-                    <div class="feature">
-                        <div class="feature-icon">📊</div>
-                        <h3>Data Management</h3>
-                        <p>Search, export, and manage your extracted data</p>
+                        <div class="feature-icon">✨</div>
+                        <h3>Zero Setup</h3>
+                        <p>No rules to write, no selectors to find - AI handles it all!</p>
                     </div>
                 </div>
             </div>
@@ -439,11 +451,12 @@
 
         <div class="input-area">
             <div class="quick-actions">
-                <div class="quick-action" onclick="quickAction('help')">💡 Help</div>
-                <div class="quick-action" onclick="quickAction('analyze')">🔍 Analyze URL</div>
-                <div class="quick-action" onclick="quickAction('scrape')">🎯 Scrape Data</div>
-                <div class="quick-action" onclick="quickAction('status')">📊 System Status</div>
-                <div class="quick-action" onclick="quickAction('export')">💾 Export Data</div>
+                <div class="quick-action" onclick="quickAction('help')">💡 What can you do?</div>
+                <div class="quick-action" onclick="quickAction('extract')">📝 Extract data</div>
+                <div class="quick-action" onclick="quickAction('analyze')">📊 Analyze prices</div>
+                <div class="quick-action" onclick="quickAction('compare')">🔍 Compare sites</div>
+                <div class="quick-action" onclick="quickAction('monitor')">👁️ Monitor changes</div>
+                <div class="quick-action" onclick="quickAction('export')">💾 Export results</div>
             </div>
             
             <input type="text" 
@@ -455,7 +468,7 @@
             <div class="input-container">
                 <textarea class="message-input" 
                          id="messageInput" 
-                         placeholder="Ask me to scrape websites, analyze URLs, check job status, or search data..."
+                         placeholder="Just tell me what data you want in plain English! For example: 'Get all product names and prices from this website'..."
                          rows="1"></textarea>
                 <button class="send-button" id="sendButton" onclick="sendMessage()">
                     <span>Send</span>
@@ -716,23 +729,30 @@
             
             switch(action) {
                 case 'help':
-                    messageInput.value = 'What can you help me with?';
+                    messageInput.value = 'What can you help me with? Show me some examples.';
+                    break;
+                case 'extract':
+                    messageInput.value = 'Extract all product information from ';
+                    document.getElementById('urlInput').style.display = 'block';
+                    document.getElementById('urlInput').focus();
                     break;
                 case 'analyze':
-                    messageInput.value = 'Analyze the structure of this website:';
+                    messageInput.value = 'Analyze and compare prices from these websites:';
                     document.getElementById('urlInput').style.display = 'block';
                     document.getElementById('urlInput').focus();
                     break;
-                case 'scrape':
-                    messageInput.value = 'Scrape data from these URLs:';
+                case 'compare':
+                    messageInput.value = 'Compare product prices across these sites:';
                     document.getElementById('urlInput').style.display = 'block';
                     document.getElementById('urlInput').focus();
                     break;
-                case 'status':
-                    messageInput.value = 'Show me the system status and my recent jobs';
+                case 'monitor':
+                    messageInput.value = 'Monitor this page for changes and notify me when prices drop:';
+                    document.getElementById('urlInput').style.display = 'block';
+                    document.getElementById('urlInput').focus();
                     break;
                 case 'export':
-                    messageInput.value = 'Export my recent scraping data as CSV';
+                    messageInput.value = 'Export my extracted data as an Excel file with charts';
                     break;
             }
             messageInput.focus();

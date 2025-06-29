@@ -33,7 +33,7 @@ class EnhancedAdaptivePlanner(AdaptivePlanner):
         self.orchestrator = EnhancedToolOrchestrator()
         self.last_performance_report = None
     
-    def create_plan(self, user_query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def create_plan(self, user_query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
         """Create an enhanced execution plan with intelligent tool selection"""
         if context is None:
             context = {}
@@ -42,7 +42,7 @@ class EnhancedAdaptivePlanner(AdaptivePlanner):
         context['user_query'] = user_query
         
         # Try to find similar patterns first (from parent class)
-        similar_patterns = self.memory.find_similar_patterns(user_query)
+        similar_patterns = await self.memory.find_similar_requests(user_query)
         
         if similar_patterns and similar_patterns[0]['similarity'] > 0.9:
             # Reuse successful pattern but enhance it
@@ -362,7 +362,7 @@ class EnhancedAdaptivePlanner(AdaptivePlanner):
         # Enhance recommendations with learning insights
         for rec in recommendations:
             # Find similar successful patterns
-            similar_patterns = self.memory.find_similar_patterns(rec['capability'])
+            similar_patterns = await self.memory.find_similar_requests(rec['capability'])
             if similar_patterns:
                 rec['similar_patterns'] = len(similar_patterns)
                 rec['potential_reuse'] = similar_patterns[0]['similarity']

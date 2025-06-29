@@ -1,241 +1,364 @@
-# Installation Guide
+# Installation Guide - AI-First Web Scraping
 
-## Prerequisites
+## Overview
 
-Before installing the Intelligent Crawl4AI Agent, ensure you have the following prerequisites:
+The AI-First Intelligent Scraper has a simplified installation process. No more complex strategy configurations or multiple services - just install and start chatting!
 
-### System Requirements
-- **Operating System**: Linux (Ubuntu 20.04+), macOS, or Windows with WSL2
-- **RAM**: 16GB+ recommended (8GB minimum)
-- **Storage**: 10GB+ free space
-- **CPU**: 4+ cores recommended
-- **GPU**: NVIDIA GPU with 8GB+ VRAM (optional, for faster AI processing)
+## Requirements
 
-### Software Prerequisites
+### Minimum Requirements
 - **Python**: 3.8 or higher
-- **Docker**: Latest version with Docker Compose
-- **Git**: For version control
-- **Claude Desktop**: For MCP integration
+- **RAM**: 8GB minimum (16GB recommended)
+- **Storage**: 2GB free space
+- **OS**: Linux, macOS, or Windows (with WSL2)
 
-## Quick Installation
+### GPU (Optional but Recommended)
+- Any NVIDIA GPU with 4GB+ VRAM
+- Speeds up AI planning by 5-10x
 
-### 1. Clone the Repository
+## Quick Start (5 Minutes)
+
+### 1. Clone Repository
 ```bash
 git clone https://github.com/yourusername/intelligent-crawl4ai-agent.git
 cd intelligent-crawl4ai-agent
 ```
 
-### 2. Run the Setup Script
+### 2. Install Dependencies
 ```bash
-chmod +x scripts/setup.sh
-./scripts/setup.sh
-```
-
-The setup script will automatically:
-- Install Python dependencies
-- Set up Ollama and download AI models
-- Start Docker services
-- Configure the environment
-
-### 3. Configure Claude Desktop
-```bash
-# Copy the configuration to Claude Desktop
-cp config/claude_desktop_config.json ~/.config/Claude\ Desktop/claude_desktop_config.json
-```
-
-Restart Claude Desktop to load the new configuration.
-
-## Manual Installation
-
-If you prefer to install manually or the setup script fails:
-
-### 1. Python Environment
-```bash
-# Create virtual environment
-python3 -m venv venv
+# Create virtual environment (recommended)
+python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
-# Install dependencies
+# Install Python packages
 pip install -r requirements.txt
-
-# Install Playwright browsers
-playwright install chromium --with-deps
 ```
 
-### 2. Install Ollama
+### 3. Install Ollama (Local AI)
 ```bash
-# Install Ollama
+# Linux/macOS
 curl -fsSL https://ollama.com/install.sh | sh
 
-# Start Ollama service
-ollama serve &
-
-# Pull required models
-ollama pull llama3.1
-ollama pull nomic-embed-text
+# Windows (in WSL2)
+curl -fsSL https://ollama.com/install.sh | sh
 ```
 
-### 3. Start Services
+### 4. Download AI Model
 ```bash
-# Start Docker services
+# Recommended model (fast, runs on most hardware)
+ollama pull deepseek-coder:1.3b
+
+# Alternative models
+ollama pull llama3.2:3b      # Better understanding, needs more RAM
+ollama pull phi3:mini         # Smallest, fastest
+ollama pull mistral:7b        # Best quality, needs GPU
+```
+
+### 5. Start the System
+```bash
+python web_ui_server.py
+```
+
+### 6. Open Browser
+Navigate to: http://localhost:8888
+
+That's it! Start chatting with your AI scraping assistant.
+
+## Detailed Installation Options
+
+### Option 1: Minimal Installation (Just Chat)
+Perfect for trying out the system.
+
+```bash
+# Install only core dependencies
+pip install fastapi uvicorn aiohttp crawl4ai
+
+# Start with defaults
+python web_ui_server.py
+```
+
+### Option 2: Full Installation (With Learning)
+Includes the self-learning system.
+
+```bash
+# Install all dependencies
+pip install -r requirements.txt
+
+# Start ChromaDB for learning memory
+docker run -d -p 8000:8000 chromadb/chroma
+
+# Install Playwright for dynamic content
+playwright install chromium
+
+# Start with learning enabled
+LEARNING_ENABLED=true python web_ui_server.py
+```
+
+### Option 3: Docker Installation (Production)
+Everything containerized and ready to scale.
+
+```bash
+# Build and start all services
 docker-compose up -d
 
-# Wait for services to be ready
-sleep 30
-
-# Check service health
+# Check status
 docker-compose ps
+
+# View logs
+docker-compose logs -f web-ui
 ```
 
-### 4. Environment Configuration
-Create a `.env` file:
-```bash
-cp .env.example .env
-# Edit .env with your configuration
-```
-
-## Docker-Only Installation
-
-For a Docker-only setup without local Python installation:
+### Option 4: Development Installation
+For contributing or customization.
 
 ```bash
-# Clone repository
+# Clone with git history
 git clone https://github.com/yourusername/intelligent-crawl4ai-agent.git
 cd intelligent-crawl4ai-agent
 
-# Start all services
-docker-compose up -d
+# Install in development mode
+pip install -e .
+pip install -r requirements-dev.txt
 
-# The agent will be available at localhost:8811
+# Install pre-commit hooks
+pre-commit install
+
+# Run tests
+pytest tests/
+```
+
+## Configuration
+
+### Basic Configuration (.env)
+Create a `.env` file in the project root:
+
+```bash
+# AI Configuration
+AI_MODEL=deepseek-coder:1.3b    # Choose your model
+OLLAMA_URL=http://localhost:11434
+
+# Web Interface
+WEB_HOST=0.0.0.0
+WEB_PORT=8888
+
+# Features
+LEARNING_ENABLED=true            # Enable self-learning
+DEBUG=false                      # Production mode
+```
+
+### Advanced Configuration
+```bash
+# Performance Tuning
+PLAN_CACHE_SIZE=1000            # Cache common plans
+MAX_WORKERS=10                  # Parallel executions
+TOOL_TIMEOUT=30                 # Tool execution timeout
+
+# Learning System
+LEARNING_THRESHOLD=0.7          # Minimum confidence to learn
+TEACHER_MODE=false              # Enable Claude teacher
+PATTERN_RETENTION_DAYS=90       # How long to keep patterns
+
+# Database (auto-configured)
+DATABASE_TYPE=sqlite            # or postgresql
+DATABASE_URL=sqlite:///data/scraping.db
+```
+
+## Platform-Specific Instructions
+
+### macOS
+```bash
+# Install Xcode tools if needed
+xcode-select --install
+
+# Install Homebrew (if not installed)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install Python 3.8+
+brew install python@3.11
+
+# Continue with standard installation
+```
+
+### Ubuntu/Debian
+```bash
+# Update system
+sudo apt update && sudo apt upgrade -y
+
+# Install dependencies
+sudo apt install -y python3-pip python3-venv curl
+
+# Continue with standard installation
+```
+
+### Windows (WSL2 Recommended)
+```powershell
+# Install WSL2 (in PowerShell as Admin)
+wsl --install
+
+# Restart and open Ubuntu terminal
+# Follow Ubuntu instructions above
+```
+
+### Windows (Native)
+```powershell
+# Install Python from python.org
+# Install Git from git-scm.com
+
+# In Command Prompt or PowerShell:
+git clone https://github.com/yourusername/intelligent-crawl4ai-agent.git
+cd intelligent-crawl4ai-agent
+
+python -m venv venv
+venv\Scripts\activate
+
+pip install -r requirements.txt
+
+# Install Ollama from https://ollama.ai
+# Then continue with model download
 ```
 
 ## Verification
 
-### Test the Installation
+### 1. Check AI Service
 ```bash
 # Test Ollama
 curl http://localhost:11434/api/tags
 
-# Test ChromaDB
-curl http://localhost:8000/api/v1/heartbeat
-
-# Test Redis
-redis-cli ping
-
-# Test PostgreSQL
-psql -h localhost -U scraper_user -d intelligent_scraping -c "SELECT 1;"
+# Should return list of installed models
 ```
 
-### Test Claude Desktop Integration
-Open Claude Desktop and try this command:
+### 2. Check Web Interface
+```bash
+# Test API
+curl http://localhost:8888/health
+
+# Should return: {"status": "healthy", ...}
 ```
-"Analyze and scrape https://example.com for company information"
+
+### 3. Test AI Planning
+```bash
+curl -X POST http://localhost:8888/api/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello, can you help me scrape data?"}'
+
+# Should return friendly AI response
 ```
 
 ## Troubleshooting
 
-### Common Issues
-
-**Ollama Models Not Downloading**
+### "Ollama not found"
 ```bash
-# Manually download models
-ollama pull llama3.1
-ollama pull nomic-embed-text
+# Verify installation
+ollama version
 
-# Check available models
+# If not found, reinstall:
+curl -fsSL https://ollama.com/install.sh | sh
+```
+
+### "Model not found"
+```bash
+# List installed models
 ollama list
+
+# Pull model again
+ollama pull deepseek-coder:1.3b
 ```
 
-**Docker Services Not Starting**
+### "Port 8888 already in use"
 ```bash
-# Check Docker daemon
-sudo systemctl status docker
+# Change port in .env
+WEB_PORT=8889
 
-# Check service logs
-docker-compose logs chromadb
-docker-compose logs ollama
+# Or find and kill process
+lsof -i :8888
+kill -9 <PID>
 ```
 
-**Claude Desktop Not Connecting**
-1. Verify the config file path is correct
-2. Restart Claude Desktop
-3. Check the Python path in the config
-4. Ensure all services are running
-
-**Memory Issues**
+### "Out of memory"
 ```bash
-# Reduce Docker memory usage
-docker system prune -f
+# Use smaller model
+AI_MODEL=phi3:mini
 
-# Adjust worker limits in .env
-MAX_WORKERS=25
-MAX_CONCURRENT_PER_WORKER=5
+# Or reduce batch size
+MAX_WORKERS=5
 ```
 
-### Performance Optimization
-
-**For High-Volume Usage**
+### "ChromaDB connection failed"
 ```bash
-# Increase resource limits
-echo "vm.max_map_count=262144" | sudo tee -a /etc/sysctl.conf
-sudo sysctl -p
+# Start ChromaDB
+docker run -d -p 8000:8000 chromadb/chroma
 
-# Optimize Docker
-sudo tee /etc/docker/daemon.json << EOF
-{
-  "log-driver": "json-file",
-  "log-opts": {
-    "max-size": "10m",
-    "max-file": "3"
-  }
-}
-EOF
-sudo systemctl restart docker
+# Or disable learning
+LEARNING_ENABLED=false
 ```
 
-**For GPU Acceleration**
-```bash
-# Install NVIDIA Docker support
-distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
-curl -s -L https://nvidia.github.io/nvidia-docker/gpgkey | sudo apt-key add -
-curl -s -L https://nvidia.github.io/nvidia-docker/$distribution/nvidia-docker.list | sudo tee /etc/apt/sources.list.d/nvidia-docker.list
+## Performance Optimization
 
-sudo apt-get update && sudo apt-get install -y nvidia-docker2
-sudo systemctl restart docker
+### For Slow Hardware
+```bash
+# .env settings for low-end systems
+AI_MODEL=phi3:mini              # Smallest model
+MAX_WORKERS=3                   # Reduce parallelism
+PLAN_CACHE_SIZE=5000           # More caching
+LEARNING_ENABLED=false         # Disable learning initially
+```
+
+### For Fast Hardware (GPU)
+```bash
+# .env settings for high-end systems
+AI_MODEL=mistral:7b            # Best model
+MAX_WORKERS=50                 # Maximum parallelism
+OLLAMA_NUM_GPU=1              # Use GPU
+TOOL_TIMEOUT=60               # Allow longer operations
+```
+
+## Updating
+
+### Update to Latest Version
+```bash
+git pull origin main
+pip install -r requirements.txt --upgrade
+```
+
+### Update AI Models
+```bash
+ollama pull deepseek-coder:1.3b
+```
+
+## Uninstallation
+
+### Remove Application
+```bash
+# Stop services
+docker-compose down
+
+# Remove project
+cd ..
+rm -rf intelligent-crawl4ai-agent
+```
+
+### Remove Ollama (Optional)
+```bash
+# Linux/macOS
+sudo rm -rf /usr/local/bin/ollama
+sudo rm -rf ~/.ollama
+
+# Remove models
+rm -rf ~/.ollama/models
 ```
 
 ## Next Steps
 
-After successful installation:
-
-1. **Read the Configuration Guide**: [configuration.md](configuration.md)
-2. **Try the Examples**: Check out [examples/](../examples/)
-3. **Explore the API**: Review [api.md](api.md)
-4. **Monitor Performance**: Access Grafana at http://localhost:3000
+1. **Start Chatting**: Open http://localhost:8888
+2. **Read Usage Guide**: Check [AI Architecture](ai-architecture.md)
+3. **Try Examples**: See [API Reference](api.md) for examples
+4. **Enable Learning**: Set `LEARNING_ENABLED=true` for improvements
+5. **Join Community**: Report issues and contribute!
 
 ## Getting Help
 
-- **Documentation**: Check the [docs/](.) directory
-- **Issues**: Report problems on GitHub Issues
-- **Discussions**: Join GitHub Discussions for questions
+- **Quick Start Issues**: Check troubleshooting above
+- **GitHub Issues**: [Report Problems](https://github.com/yourusername/intelligent-crawl4ai-agent/issues)
+- **Documentation**: [Full Docs](https://github.com/yourusername/intelligent-crawl4ai-agent/docs)
 
-## Uninstallation
-
-To completely remove the system:
-```bash
-# Stop and remove containers
-docker-compose down -v
-
-# Remove Docker images
-docker rmi $(docker images | grep intelligent-crawl4ai | awk '{print $3}')
-
-# Remove data volumes
-docker volume prune -f
-
-# Remove Python environment
-rm -rf venv/
-
-# Remove Ollama models (optional)
-ollama rm llama3.1
-ollama rm nomic-embed-text
-```
+Welcome to AI-First Web Scraping! 🚀

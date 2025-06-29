@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Tools Visualization - Intelligent Crawler</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2D3748;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #718096;
+            margin-bottom: 40px;
+            font-size: 18px;
+        }
+        
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        
+        .tool-card {
+            background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+            border: 2px solid #e2e8f0;
+            border-radius: 15px;
+            padding: 25px;
+            transition: transform 0.3s, box-shadow 0.3s;
+            cursor: pointer;
+        }
+        
+        .tool-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            border-color: #667eea;
+        }
+        
+        .tool-icon {
+            font-size: 40px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .tool-name {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2D3748;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+        
+        .tool-description {
+            color: #4A5568;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .tool-capabilities {
+            margin-top: 15px;
+        }
+        
+        .capability {
+            background: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #4A5568;
+            display: inline-block;
+            margin: 4px;
+            border: 1px solid #CBD5E0;
+        }
+        
+        .flow-diagram {
+            background: #f7fafc;
+            border-radius: 15px;
+            padding: 30px;
+            margin: 40px 0;
+            text-align: center;
+        }
+        
+        .flow-step {
+            display: inline-block;
+            background: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            margin: 10px;
+            border: 2px solid #e2e8f0;
+            position: relative;
+        }
+        
+        .flow-arrow {
+            font-size: 24px;
+            color: #667eea;
+            margin: 0 10px;
+        }
+        
+        .example-section {
+            background: #EBF8FF;
+            border-radius: 15px;
+            padding: 30px;
+            margin-top: 40px;
+        }
+        
+        .example {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 1px solid #BEE3F8;
+        }
+        
+        .example-title {
+            font-weight: 600;
+            color: #2B6CB0;
+            margin-bottom: 10px;
+        }
+        
+        .example-request {
+            background: #F7FAFC;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: monospace;
+            color: #2D3748;
+        }
+        
+        .example-tools {
+            color: #718096;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .tools-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .flow-step {
+                display: block;
+                margin: 10px auto;
+            }
+            
+            .flow-arrow {
+                display: block;
+                transform: rotate(90deg);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI Tools Arsenal</h1>
+        <p class="subtitle">Each tool is automatically selected by AI based on your request</p>
+        
+        <div class="tools-grid">
+            <div class="tool-card">
+                <div class="tool-icon">🕷️</div>
+                <div class="tool-name">CrawlTool</div>
+                <div class="tool-description">Fetches web pages and handles complex sites</div>
+                <div class="tool-capabilities">
+                    <div class="capability">JavaScript rendering</div>
+                    <div class="capability">Session management</div>
+                    <div class="capability">Anti-bot bypass</div>
+                    <div class="capability">Parallel crawling</div>
+                </div>
+            </div>
+            
+            <div class="tool-card">
+                <div class="tool-icon">📝</div>
+                <div class="tool-name">ExtractorTool</div>
+                <div class="tool-description">Extracts specific data from pages</div>
+                <div class="tool-capabilities">
+                    <div class="capability">Tables & lists</div>
+                    <div class="capability">Contact info</div>
+                    <div class="capability">Metadata</div>
+                    <div class="capability">Custom patterns</div>
+                </div>
+            </div>
+            
+            <div class="tool-card">
+                <div class="tool-icon">📊</div>
+                <div class="tool-name">AnalyzerTool</div>
+                <div class="tool-description">Analyzes and compares data</div>
+                <div class="tool-capabilities">
+                    <div class="capability">Price analysis</div>
+                    <div class="capability">Pattern detection</div>
+                    <div class="capability">Anomaly detection</div>
+                    <div class="capability">Trend analysis</div>
+                </div>
+            </div>
+            
+            <div class="tool-card">
+                <div class="tool-icon">💾</div>
+                <div class="tool-name">DatabaseTool</div>
+                <div class="tool-description">Stores and retrieves data</div>
+                <div class="tool-capabilities">
+                    <div class="capability">Data persistence</div>
+                    <div class="capability">Query support</div>
+                    <div class="capability">History tracking</div>
+                    <div class="capability">Relationships</div>
+                </div>
+            </div>
+            
+            <div class="tool-card">
+                <div class="tool-icon">📤</div>
+                <div class="tool-name">ExporterTool</div>
+                <div class="tool-description">Exports data in various formats</div>
+                <div class="tool-capabilities">
+                    <div class="capability">Excel with charts</div>
+                    <div class="capability">CSV files</div>
+                    <div class="capability">JSON format</div>
+                    <div class="capability">XML export</div>
+                </div>
+            </div>
+            
+            <div class="tool-card">
+                <div class="tool-icon">⚡</div>
+                <div class="tool-name">Enhanced Tools</div>
+                <div class="tool-description">Optimizes performance and learning</div>
+                <div class="tool-capabilities">
+                    <div class="capability">Self-optimization</div>
+                    <div class="capability">Parameter discovery</div>
+                    <div class="capability">Performance tracking</div>
+                    <div class="capability">Learning system</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="flow-diagram">
+            <h2>How Your Request Flows Through The System</h2>
+            <div style="margin-top: 30px;">
+                <div class="flow-step">👤 You Ask</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-step">🧠 AI Plans</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-step">🔧 Tools Execute</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-step">📚 System Learns</div>
+                <span class="flow-arrow">→</span>
+                <div class="flow-step">📊 You Get Results</div>
+            </div>
+        </div>
+        
+        <div class="example-section">
+            <h2>🌟 Real Examples - See The AI In Action</h2>
+            
+            <div class="example">
+                <div class="example-title">Simple Price Extraction</div>
+                <div class="example-request">
+                    "Get all laptop prices from bestbuy.com"
+                </div>
+                <div class="example-tools">
+                    AI uses: CrawlTool → ExtractorTool → ExporterTool
+                </div>
+            </div>
+            
+            <div class="example">
+                <div class="example-title">Multi-Site Comparison</div>
+                <div class="example-request">
+                    "Compare iPhone 15 prices across Amazon, BestBuy, and Apple Store"
+                </div>
+                <div class="example-tools">
+                    AI uses: CrawlTool (3x parallel) → ExtractorTool → AnalyzerTool → ExporterTool
+                </div>
+            </div>
+            
+            <div class="example">
+                <div class="example-title">Contact Information Gathering</div>
+                <div class="example-request">
+                    "Find all contact details from these 10 company websites"
+                </div>
+                <div class="example-tools">
+                    AI uses: CrawlTool (batch) → ExtractorTool (contact mode) → DatabaseTool → ExporterTool
+                </div>
+            </div>
+            
+            <div class="example">
+                <div class="example-title">Price Monitoring</div>
+                <div class="example-request">
+                    "Track these products daily and alert me when prices drop by 20%"
+                </div>
+                <div class="example-tools">
+                    AI uses: CrawlTool → ExtractorTool → DatabaseTool → AnalyzerTool (trend) → Alert System
+                </div>
+            </div>
+        </div>
+        
+        <div style="text-align: center; margin-top: 40px; color: #718096;">
+            <p style="font-size: 18px; font-weight: 600;">Remember: You don't choose the tools - AI does! 🤖</p>
+            <p>Just describe what you want in plain English, and the AI will figure out the best approach.</p>
+        </div>
+    </div>
+</body>
+</html>

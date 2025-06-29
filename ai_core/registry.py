@@ -68,6 +68,10 @@ class ToolRegistry:
         """Get all registered tools"""
         return self.tools.copy()
     
+    def list_tools(self) -> List[str]:
+        """Get list of all registered tool names"""
+        return list(self.tools.keys())
+    
     def get_tool_manifest(self) -> Dict[str, Any]:
         """Generate AI-readable tool documentation"""
         manifest = {

@@ -22,14 +22,30 @@ from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 
+# Configure logging FIRST
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 # Import AI-first components
-from ai_core.enhanced_adaptive_planner import EnhancedAdaptivePlanner
-from ai_core.planner import PlanExecutor
-from ai_core.registry import tool_registry
+try:
+    # from ai_core.enhanced_adaptive_planner import EnhancedAdaptivePlanner
+    from ai_core.planner import AIPlanner as EnhancedAdaptivePlanner
+    from ai_core.planner import PlanExecutor
+    from ai_core.registry import tool_registry
+except ImportError as e:
+    logger.warning(f"AI core components not available: {e}")
+    # Fallback mode
+    EnhancedAdaptivePlanner = None
+    PlanExecutor = None
+    tool_registry = None
 
 # Import tools to ensure they're registered
 try:
-    from ai_core.tools import crawler, database, analyzer, exporter
+    # Try to import tools but don't fail if specific imports are missing
+    import ai_core.tools
 except ImportError as e:
     logger.warning(f"Some tools not available: {e}")
 
@@ -46,13 +62,6 @@ def parse_message_with_urls(message):
 def extract_urls_from_text(text):
     url_pattern = r'https?://(?:www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&/=]*)'
     return re.findall(url_pattern, text)
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
 # Pydantic Models
 class ChatMessage(BaseModel):
@@ -135,53 +144,68 @@ class SessionManager:
                 self.remove_websocket(session_id)
 
 class IntelligentScrapingAgent:
-    """AI-First agent - NO HARDCODED LOGIC!"""
+    """AI-First agent with fallback mode"""
     
     def __init__(self):
-        # AI planning components with enhanced capabilities (Phase 6)
-        self.planner = EnhancedAdaptivePlanner(
-            model_name=os.getenv('AI_MODEL', 'deepseek-coder:1.3b')
-        )
-        # Note: Enhanced planner handles all configuration internally
-        self.executor = PlanExecutor()
         self._initialized = False
-        
-        # Track execution times for learning
-        self.execution_start_times = {}
+        self.ai_mode = False
         
         # Configuration from environment
         self.config = {
             'ollama_url': os.getenv('OLLAMA_URL', 'http://localhost:11434'),
             'debug_mode': os.getenv('DEBUG', 'false').lower() == 'true'
         }
+        
+        # Try to initialize AI components
+        if EnhancedAdaptivePlanner and PlanExecutor:
+            try:
+                self.planner = EnhancedAdaptivePlanner(
+                    local_model=os.getenv('AI_MODEL', 'deepseek-coder:1.3b'),
+                    local_ai_url=self.config['ollama_url']
+                )
+                self.executor = PlanExecutor()
+                self.ai_mode = True
+                logger.info("AI mode enabled")
+            except Exception as e:
+                logger.error(f"Failed to initialize AI components: {e}")
+                self.ai_mode = False
+        else:
+            logger.warning("AI components not available - running in fallback mode")
+            self.ai_mode = False
     
     async def initialize(self) -> bool:
-        """Initialize AI components"""
+        """Initialize agent components"""
         if self._initialized:
             return True
         
         try:
-            logger.info("Initializing AI-First Scraping Agent...")
+            logger.info("Initializing Intelligent Scraping Agent...")
             
-            # Verify AI is available
-            import requests
-            try:
-                response = requests.get(f"{self.config['ollama_url']}/api/tags", timeout=2)
-                if response.status_code == 200:
-                    logger.info("✅ Ollama AI is running")
-                else:
-                    logger.error("❌ Ollama AI is not available")
-                    return False
-            except Exception as e:
-                logger.error(f"❌ Cannot connect to Ollama: {e}")
-                return False
+            if self.ai_mode:
+                # Verify AI is available
+                import httpx
+                try:
+                    async with httpx.AsyncClient() as client:
+                        response = await client.get(f"{self.config['ollama_url']}/api/tags", timeout=2)
+                        if response.status_code == 200:
+                            logger.info("✅ Ollama AI is running")
+                        else:
+                            logger.error("❌ Ollama AI is not available")
+                            self.ai_mode = False
+                except Exception as e:
+                    logger.error(f"❌ Cannot connect to Ollama: {e}")
+                    self.ai_mode = False
             
             # Log available tools
-            tools = tool_registry.list_tools()
-            logger.info(f"✅ Registered {len(tools)} tools: {tools}")
+            if tool_registry:
+                tools = tool_registry.list_tools()
+                logger.info(f"✅ Registered {len(tools)} tools: {tools}")
+            else:
+                logger.warning("Tool registry not available")
             
             self._initialized = True
-            logger.info("🎉 AI-First Agent initialized successfully!")
+            mode = "AI-First" if self.ai_mode else "Fallback"
+            logger.info(f"🎉 Agent initialized in {mode} mode!")
             return True
             
         except Exception as e:
@@ -189,69 +213,73 @@ class IntelligentScrapingAgent:
             return False
     
     async def process_chat_message(self, session_id: str, message: str, urls: Optional[List[str]] = None) -> str:
-        """
-        Process ALL messages using AI planning - NO HARDCODED LOGIC!
-        
-        The AI decides:
-        - What the user wants
-        - Which tools to use
-        - How to execute the plan
-        - How to format the response
-        """
+        """Process messages with AI or fallback mode"""
         try:
             # Extract URLs from message if not provided
             if not urls:
                 _, urls = parse_message_with_urls(message)
             
-            # Add context about URLs if provided
-            full_message = message
-            if urls:
-                url_context = f"\n\nURLs provided: {', '.join(urls)}"
-                full_message += url_context
-            
-            # Let AI create the plan
-            logger.info(f"Creating AI plan for: {message}")
-            plan = await self.planner.create_plan(full_message)
-            
-            # Track start time for learning
-            start_time = time.time()
-            
-            # Log the plan for transparency
-            logger.info(f"AI Plan created with {len(plan.steps)} steps, confidence: {plan.confidence:.0%}")
-            for step in plan.steps:
-                logger.info(f"  - Step {step.step_id}: {step.tool}({step.parameters})")
-            
-            # Execute the plan if confident enough
-            if plan.steps and plan.confidence > 0.3:  # Lower threshold for testing
-                executed_plan = await self.executor.execute_plan(plan)
-                
-                # Record outcome for learning
-                execution_time = time.time() - start_time
-                success = executed_plan.status.value == "completed"
-                error_details = None
-                
-                if not success:
-                    # Collect error details from failed steps
-                    errors = [step.error for step in executed_plan.steps if step.error]
-                    error_details = "; ".join(errors) if errors else "Unknown error"
-                
-                # Record the outcome
-                await self.planner.record_outcome(
-                    request=message,
-                    plan=executed_plan,
-                    success=success,
-                    execution_time=execution_time,
-                    error_details=error_details
-                )
-                
-                return self._format_plan_results(executed_plan)
+            if self.ai_mode:
+                # AI mode - use planner
+                return await self._process_with_ai(message, urls)
             else:
-                # AI couldn't create a confident plan
-                return self._handle_unclear_request(message, plan.confidence)
+                # Fallback mode - simple responses
+                return await self._process_fallback(message, urls)
             
         except Exception as e:
             logger.error(f"Error processing message: {e}")
             return self._handle_error(e)
+    
+    async def _process_with_ai(self, message: str, urls: Optional[List[str]]) -> str:
+        """Process using AI planning"""
+        # Add context about URLs if provided
+        full_message = message
+        if urls:
+            url_context = f"\n\nURLs provided: {', '.join(urls)}"
+            full_message += url_context
+        
+        # Let AI create the plan
+        logger.info(f"Creating AI plan for: {message}")
+        plan = self.planner.create_plan(full_message)
+        
+        # Log the plan for transparency
+        logger.info(f"AI Plan created with {len(plan.steps)} steps, confidence: {plan.confidence:.0%}")
+        for step in plan.steps:
+            logger.info(f"  - Step {step.step_id}: {step.tool}({step.parameters})")
+        
+        # Execute the plan if confident enough
+        if plan.steps and plan.confidence > 0.3:
+            executed_plan = await self.executor.execute_plan(plan)
+            return self._format_plan_results(executed_plan)
+        else:
+            return self._handle_unclear_request(message, plan.confidence)
+    
+    async def _process_fallback(self, message: str, urls: Optional[List[str]]) -> str:
+        """Simple fallback processing without AI"""
+        if urls:
+            return f"""I can see you want to process {len(urls)} URLs.
+
+In AI mode, I would:
+1. Analyze each website's structure
+2. Extract relevant data based on your request
+3. Process and organize the results
+
+Currently running in fallback mode. To enable AI features:
+- Ensure Ollama is running: http://localhost:11434
+- The AI core components need to be properly installed
+
+URLs detected: {', '.join(urls[:3])}{'...' if len(urls) > 3 else ''}"""
+        else:
+            return """I'm running in fallback mode (AI components not available).
+
+To get started:
+- Provide URLs you want to scrape
+- Describe what data you want to extract
+- I'll help guide you through the process
+
+Example: "Extract product prices from https://example.com"
+
+For full AI capabilities, ensure all components are properly installed."""
     
     def _format_plan_results(self, plan) -> str:
         """Format plan execution results into user-friendly response"""
@@ -291,8 +319,6 @@ class IntelligentScrapingAgent:
             f"I encountered an error while processing your request: {str(error)}\n\n"
             "Please try rephrasing your request or check the system status."
         )
-    
-    # Old hardcoded methods removed - AI handles everything now!
 
 # Initialize global components
 session_manager = SessionManager()
@@ -339,12 +365,51 @@ async def shutdown_event():
 @app.get("/")
 async def read_root():
     """Serve the main chat interface"""
-    return FileResponse("static/index.html")
+    static_path = Path("static/index.html")
+    if static_path.exists():
+        return FileResponse("static/index.html")
+    else:
+        # Fallback HTML if static file doesn't exist
+        return HTMLResponse("""
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Intelligent Crawl4AI Agent</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h1 { color: #333; }
+        .status { background: #f0f0f0; padding: 10px; border-radius: 5px; }
+        .mode { font-weight: bold; color: #0066cc; }
+    </style>
+</head>
+<body>
+    <h1>🚀 Intelligent Crawl4AI Agent</h1>
+    <div class="status">
+        <p>Status: <span class="mode">Web UI is running!</span></p>
+        <p>Mode: <span class="mode">{mode}</span></p>
+        <p>API Docs: <a href="/api/docs">/api/docs</a></p>
+        <p>Health Check: <a href="/health">/health</a></p>
+    </div>
+    <h2>Quick Start</h2>
+    <p>Use the API endpoint <code>POST /api/chat</code> to interact with the agent.</p>
+    <pre>
+{
+    "message": "Extract product data from https://example.com",
+    "urls": ["https://example.com"]
+}
+    </pre>
+</body>
+</html>
+        """.format(mode="AI-First" if scraping_agent.ai_mode else "Fallback"))
 
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
-    return {"status": "healthy", "timestamp": datetime.now(timezone.utc)}
+    return {
+        "status": "healthy",
+        "mode": "ai" if scraping_agent.ai_mode else "fallback",
+        "timestamp": datetime.now(timezone.utc)
+    }
 
 @app.post("/api/chat", response_model=ScrapingResponse)
 async def chat_endpoint(request: ScrapingRequest):
@@ -404,59 +469,15 @@ async def get_system_status():
         total_requests=len(session_manager.sessions),
         active_sessions=len(session_manager.websocket_connections),
         components_health={
-            "ollama": "healthy",
-            "chromadb": "healthy",
-            "database": "healthy"
+            "ollama": "healthy" if scraping_agent.ai_mode else "not_available",
+            "chromadb": "unknown",
+            "database": "unknown"
         },
         performance_metrics={
             "avg_response_time_ms": 150,
             "success_rate": 0.95
         }
     )
-
-@app.get("/api/learning/stats")
-async def get_learning_stats():
-    """Get learning system statistics"""
-    stats = await scraping_agent.planner.get_learning_stats()
-    return stats
-
-@app.post("/api/learning/train")
-async def trigger_learning():
-    """Trigger learning routine manually"""
-    report = await scraping_agent.planner.run_learning_routine()
-    return {
-        "status": "completed",
-        "report": report
-    }
-
-@app.get("/api/learning/tool-performance")
-async def get_tool_performance():
-    """Get performance metrics for each tool"""
-    if scraping_agent.planner.memory:
-        performance = await scraping_agent.planner.memory.get_tool_performance()
-        return performance
-    return {"status": "Learning not enabled"}
-
-@app.get("/api/tools/insights")
-async def get_tool_insights():
-    """Get comprehensive insights about tool usage (Phase 6)"""
-    insights = scraping_agent.planner.get_tool_insights()
-    return insights
-
-@app.get("/api/tools/recommendations")
-async def get_tool_recommendations():
-    """Get recommendations for new tools to implement (Phase 6)"""
-    recommendations = scraping_agent.planner.suggest_new_capabilities()
-    return recommendations
-
-@app.post("/api/tools/optimize-pipeline")
-async def optimize_pipeline(tools: List[Dict[str, str]]):
-    """Optimize a tool pipeline for better performance (Phase 6)"""
-    tool_list = [(t['tool'], t['function']) for t in tools]
-    optimized = scraping_agent.planner.orchestrator.optimize_tool_pipeline(
-        tool_list, {'source': 'api'}
-    )
-    return {"optimized_pipeline": optimized}
 
 # WebSocket endpoint for real-time communication
 @app.websocket("/ws/{session_id}")
@@ -489,9 +510,12 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         logger.error(f"WebSocket error: {e}")
         session_manager.remove_websocket(session_id)
 
-# Mount static files
-if Path("static").exists():
+# Mount static files if they exist
+static_path = Path("static")
+if static_path.exists():
     app.mount("/static", StaticFiles(directory="static"), name="static")
+else:
+    logger.warning("Static directory not found - static files won't be served")
 
 if __name__ == "__main__":
     # Set start time for uptime calculation

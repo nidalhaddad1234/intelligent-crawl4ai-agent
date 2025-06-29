@@ -24,3 +24,8 @@ try:
     from .exporter import *
 except ImportError:
     pass
+
+try:
+    from .extractor import *
+except ImportError:
+    pass

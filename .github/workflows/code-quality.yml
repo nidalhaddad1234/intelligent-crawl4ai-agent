@@ -1,0 +1,182 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    # Run every Monday at 9 AM UTC
+    - cron: '0 9 * * 1'
+
+jobs:
+  code-quality:
+    name: Code Quality Analysis
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better analysis
+          
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install radon pylint flake8 black isort
+          
+      - name: Analyze code complexity
+        run: |
+          echo "## Code Complexity Report" >> $GITHUB_STEP_SUMMARY
+          echo "### Cyclomatic Complexity" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          radon cc ai_core -a -nb >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Maintainability Index" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          radon mi ai_core -nb >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+      - name: Check code style
+        run: |
+          echo "### Code Style Check" >> $GITHUB_STEP_SUMMARY
+          
+          # Check if code is formatted with black
+          black --check . 2>&1 | tee black-output.txt || true
+          if grep -q "would be reformatted" black-output.txt; then
+            echo "❌ Code needs formatting with Black" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Code is properly formatted with Black" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Check import sorting
+          isort --check-only . 2>&1 | tee isort-output.txt || true
+          if grep -q "would be reformatted" isort-output.txt; then
+            echo "❌ Imports need sorting with isort" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ Imports are properly sorted" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+      - name: Count lines of code
+        run: |
+          echo "### Lines of Code" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          find ai_core -name "*.py" -type f | xargs wc -l | sort -nr >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          
+      - name: TODO and FIXME scan
+        run: |
+          echo "### TODOs and FIXMEs" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          grep -rn "TODO\|FIXME" ai_core --include="*.py" || echo "No TODOs or FIXMEs found!" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+  performance-check:
+    name: Performance Benchmark
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest-benchmark memory_profiler
+          
+      - name: Run performance benchmarks
+        run: |
+          # Create simple benchmark tests if they don't exist
+          mkdir -p benchmarks
+          cat > benchmarks/test_performance.py << 'EOF'
+          import pytest
+          from ai_core.registry import tool_registry
+          from ai_core.planner import AIPlanner
+          
+          @pytest.mark.benchmark
+          def test_tool_registry_performance(benchmark):
+              def list_tools():
+                  return tool_registry.list_tools()
+              result = benchmark(list_tools)
+              assert len(result) > 0
+              
+          @pytest.mark.benchmark
+          def test_plan_creation_performance(benchmark):
+              planner = AIPlanner()
+              def create_plan():
+                  return planner._create_plan_structure("test query", [])
+              result = benchmark(create_plan)
+              assert result is not None
+          EOF
+          
+          pytest benchmarks/test_performance.py --benchmark-only --benchmark-json=benchmark.json || true
+          
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'pytest'
+          output-file-path: benchmark.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          comment-on-alert: true
+          alert-threshold: '200%'
+          comment-always: true
+          benchmark-data-dir-path: 'benchmarks'
+
+  ai-health-check:
+    name: AI System Health Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          
+      - name: Check tool registration
+        run: |
+          python -c "
+          from ai_core.registry import tool_registry
+          tools = tool_registry.list_tools()
+          print(f'Registered tools: {len(tools)}')
+          for tool in tools:
+              print(f'  - {tool}')
+          assert len(tools) >= 4, 'Expected at least 4 tools registered'
+          "
+          
+      - name: Validate AI configuration
+        run: |
+          python -c "
+          import os
+          from ai_core.enhanced_adaptive_planner import EnhancedAdaptivePlanner
+          
+          # Check if planner can be instantiated
+          try:
+              planner = EnhancedAdaptivePlanner(model_name='deepseek-coder:1.3b')
+              print('✅ Enhanced AI Planner initialized successfully')
+          except Exception as e:
+              print(f'❌ Failed to initialize planner: {e}')
+              exit(1)
+          "
