@@ -1,0 +1,37 @@
+{
+  "dashboard": {
+    "title": "AI-First Web Scraper Dashboard",
+    "panels": [
+      {
+        "title": "Active Sessions",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "sum(active_sessions)",
+            "legendFormat": "Active Sessions"
+          }
+        ]
+      },
+      {
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "Requests/sec"
+          }
+        ]
+      },
+      {
+        "title": "AI Analysis Success Rate",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "avg(analysis_success_rate)",
+            "legendFormat": "Success Rate"
+          }
+        ]
+      }
+    ]
+  }
+}

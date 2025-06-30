@@ -1,188 +1,101 @@
 #!/usr/bin/env python3
 """
-Extraction Strategies Module
-Provides intelligent, adaptive extraction strategies for different website types
+Strategies Package
+Organized extraction strategies by purpose and functionality
 """
 
-from .base_strategy import BaseExtractionStrategy, StrategyResult
-from .css_strategies import (
-    DirectoryCSSStrategy,
-    EcommerceCSSStrategy,
-    NewsCSSStrategy,
-    ContactCSSStrategy,
-    SocialMediaCSSStrategy
-)
-from .llm_strategies import (
-    IntelligentLLMStrategy,
-    ContextAwareLLMStrategy,
-    AdaptiveLLMStrategy,
-    MultiPassLLMStrategy
-)
-from .hybrid_strategies import (
-    JSONCSSHybridStrategy,
-    SmartHybridStrategy,
-    FallbackStrategy,
-    AdaptiveHybridStrategy
-)
-from .platform_strategies import (
-    YelpStrategy,
-    LinkedInStrategy,
-    AmazonStrategy,
-    YellowPagesStrategy,
-    GoogleBusinessStrategy,
-    FacebookStrategy
-)
-from .specialized_strategies import (
-    RegexExtractionStrategy,
-    FormAutoStrategy,
-    PaginationStrategy,
-    InfiniteScrollStrategy,
-    AuthenticationStrategy,
-    CaptchaStrategy
-)
+# Basic extraction strategies
+from .extraction.regex import RegexExtractionStrategy as BasicRegexStrategy
+from .extraction.css_selectors.directory_css import DirectoryCSSStrategy
+from .extraction.css_selectors.ecommerce_css import EcommerceCSSStrategy
+from .extraction.css_selectors.news_css import NewsCSSStrategy
+from .extraction.css_selectors.contact_css import ContactCSSStrategy
+from .extraction.css_selectors.social_css import SocialMediaCSSStrategy
+
+# Advanced extraction strategies
+from .extraction.advanced.regex_patterns import RegexExtractionStrategy
+from .extraction.advanced.xpath_extraction import JsonXPathExtractionStrategy
+from .extraction.advanced.cosine_similarity import CosineStrategy
+
+# Navigation strategies
+from .navigation.pagination import PaginationStrategy
+from .navigation.infinite_scroll import InfiniteScrollStrategy
+
+# Authentication strategies
+from .authentication.auth_handler import AuthenticationStrategy
+from .authentication.captcha_solver import CaptchaStrategy
+
+# Automation strategies
+from .automation.form_automation import FormAutoStrategy
+
+# Platform strategies
+from .platforms.business_directories.yelp import YelpStrategy
+from .platforms.business_directories.yellow_pages import YellowPagesStrategy
+from .platforms.business_directories.google_business import GoogleBusinessStrategy
+from .platforms.social_networks.linkedin import LinkedInStrategy
+from .platforms.social_networks.facebook import FacebookStrategy
+from .platforms.ecommerce.amazon import AmazonStrategy
+
+# Hybrid strategies
+from .hybrid.json_css_hybrid import JSONCSSHybridStrategy
+from .hybrid.smart_hybrid import SmartHybridStrategy
+from .hybrid.fallback_chains import FallbackStrategy
+from .hybrid.adaptive_learning import AdaptiveHybridStrategy
+from .hybrid.multi_strategy import MultiStrategyCoordinator
+from .hybrid.adaptive_crawler import AdaptiveCrawlerStrategy
+from .hybrid.ai_enhanced import AIEnhancedStrategy
+
+# LLM strategies
+from .llm.intelligent_base import IntelligentLLMStrategy
+from .llm.context_aware import ContextAwareLLMStrategy
+from .llm.adaptive_learning import AdaptiveLLMStrategy
+from .llm.multipass_extraction import MultiPassLLMStrategy
 
 __all__ = [
-    # Base classes
-    'BaseExtractionStrategy',
-    'StrategyResult',
+    # Basic extraction strategies
+    "BasicRegexStrategy",
+    "DirectoryCSSStrategy",
+    "EcommerceCSSStrategy", 
+    "NewsCSSStrategy",
+    "ContactCSSStrategy",
+    "SocialMediaCSSStrategy",
     
-    # CSS Strategies
-    'DirectoryCSSStrategy',
-    'EcommerceCSSStrategy', 
-    'NewsCSSStrategy',
-    'ContactCSSStrategy',
-    'SocialMediaCSSStrategy',
+    # Advanced extraction strategies
+    "RegexExtractionStrategy",
+    "JsonXPathExtractionStrategy",
+    "CosineStrategy",
     
-    # LLM Strategies
-    'IntelligentLLMStrategy',
-    'ContextAwareLLMStrategy',
-    'AdaptiveLLMStrategy',
-    'MultiPassLLMStrategy',
+    # Navigation
+    "PaginationStrategy", 
+    "InfiniteScrollStrategy",
     
-    # Hybrid Strategies
-    'JSONCSSHybridStrategy',
-    'SmartHybridStrategy',
-    'FallbackStrategy',
-    'AdaptiveHybridStrategy',
+    # Authentication
+    "AuthenticationStrategy",
+    "CaptchaStrategy",
     
-    # Platform-Specific Strategies
-    'YelpStrategy',
-    'LinkedInStrategy',
-    'AmazonStrategy',
-    'YellowPagesStrategy',
-    'GoogleBusinessStrategy',
-    'FacebookStrategy',
+    # Automation
+    "FormAutoStrategy",
     
-    # Specialized Strategies
-    'RegexExtractionStrategy',
-    'FormAutoStrategy',
-    'PaginationStrategy',
-    'InfiniteScrollStrategy',
-    'AuthenticationStrategy',
-    'CaptchaStrategy'
+    # Platform-specific strategies
+    "YelpStrategy",
+    "YellowPagesStrategy", 
+    "GoogleBusinessStrategy",
+    "LinkedInStrategy",
+    "FacebookStrategy",
+    "AmazonStrategy",
+    
+    # Hybrid strategies
+    "JSONCSSHybridStrategy",
+    "SmartHybridStrategy",
+    "FallbackStrategy",
+    "AdaptiveHybridStrategy",
+    "MultiStrategyCoordinator",
+    "AdaptiveCrawlerStrategy",
+    "AIEnhancedStrategy",
+    
+    # LLM strategies
+    "IntelligentLLMStrategy",
+    "ContextAwareLLMStrategy",
+    "AdaptiveLLMStrategy",
+    "MultiPassLLMStrategy"
 ]
-
-# Strategy registry for dynamic selection
-STRATEGY_REGISTRY = {
-    # CSS Strategies
-    'directory_css': DirectoryCSSStrategy,
-    'ecommerce_css': EcommerceCSSStrategy,
-    'news_css': NewsCSSStrategy,
-    'contact_css': ContactCSSStrategy,
-    'social_css': SocialMediaCSSStrategy,
-    
-    # LLM Strategies
-    'intelligent_llm': IntelligentLLMStrategy,
-    'context_llm': ContextAwareLLMStrategy,
-    'adaptive_llm': AdaptiveLLMStrategy,
-    'multipass_llm': MultiPassLLMStrategy,
-    
-    # Hybrid Strategies
-    'json_css_hybrid': JSONCSSHybridStrategy,
-    'smart_hybrid': SmartHybridStrategy,
-    'fallback': FallbackStrategy,
-    'adaptive_hybrid': AdaptiveHybridStrategy,
-    
-    # Platform Strategies
-    'yelp': YelpStrategy,
-    'linkedin': LinkedInStrategy,
-    'amazon': AmazonStrategy,
-    'yellowpages': YellowPagesStrategy,
-    'google_business': GoogleBusinessStrategy,
-    'facebook': FacebookStrategy,
-    
-    # Specialized Strategies
-    'regex': RegexExtractionStrategy,
-    'form_auto': FormAutoStrategy,
-    'pagination': PaginationStrategy,
-    'infinite_scroll': InfiniteScrollStrategy,
-    'authentication': AuthenticationStrategy,
-    'captcha': CaptchaStrategy
-}
-
-def get_strategy(strategy_name: str, **kwargs):
-    """Get strategy instance by name"""
-    if strategy_name in STRATEGY_REGISTRY:
-        return STRATEGY_REGISTRY[strategy_name](**kwargs)
-    else:
-        raise ValueError(f"Unknown strategy: {strategy_name}. Available strategies: {list(STRATEGY_REGISTRY.keys())}")
-
-def list_strategies():
-    """List all available strategies"""
-    return list(STRATEGY_REGISTRY.keys())
-
-def get_strategies_by_type(strategy_type: str):
-    """Get strategies filtered by type"""
-    type_mapping = {
-        'css': ['directory_css', 'ecommerce_css', 'news_css', 'contact_css', 'social_css'],
-        'llm': ['intelligent_llm', 'context_llm', 'adaptive_llm', 'multipass_llm'],
-        'hybrid': ['json_css_hybrid', 'smart_hybrid', 'fallback', 'adaptive_hybrid'],
-        'platform': ['yelp', 'linkedin', 'amazon', 'yellowpages', 'google_business', 'facebook'],
-        'specialized': ['regex', 'form_auto', 'pagination', 'infinite_scroll', 'authentication', 'captcha']
-    }
-    return type_mapping.get(strategy_type, [])
-
-def get_recommended_strategies(purpose: str, website_type: str = None):
-    """Get recommended strategies for a given purpose and website type"""
-    
-    recommendations = {
-        'company_info': {
-            'directory_listing': ['directory_css', 'contact_css'],
-            'corporate': ['intelligent_llm', 'contact_css'],
-            'e_commerce': ['ecommerce_css', 'intelligent_llm'],
-            'default': ['smart_hybrid', 'intelligent_llm']
-        },
-        'contact_discovery': {
-            'any': ['regex', 'contact_css', 'intelligent_llm', 'form_auto'],
-            'default': ['regex', 'contact_css', 'intelligent_llm']
-        },
-        'product_data': {
-            'e_commerce': ['ecommerce_css', 'json_css_hybrid'],
-            'amazon': ['amazon'],
-            'default': ['ecommerce_css', 'json_css_hybrid']
-        },
-        'profile_info': {
-            'linkedin': ['linkedin', 'authentication'],
-            'social_media': ['social_css', 'intelligent_llm'],
-            'default': ['social_css', 'intelligent_llm']
-        },
-        'news_content': {
-            'news': ['news_css', 'json_css_hybrid'],
-            'default': ['news_css', 'intelligent_llm']
-        },
-        'business_listings': {
-            'yelp': ['yelp', 'regex', 'pagination'],
-            'yellowpages': ['yellowpages', 'regex', 'pagination'],
-            'directory_listing': ['directory_css', 'regex', 'pagination'],
-            'default': ['directory_css', 'regex', 'pagination']
-        }
-    }
-    
-    purpose_strategies = recommendations.get(purpose, {})
-    
-    if website_type and website_type in purpose_strategies:
-        return purpose_strategies[website_type]
-    elif 'any' in purpose_strategies:
-        return purpose_strategies['any']
-    else:
-        return purpose_strategies.get('default', ['smart_hybrid', 'intelligent_llm'])

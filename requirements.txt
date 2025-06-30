@@ -1,61 +1,50 @@
-# Core dependencies
+# 🧠 Intelligent Crawl4AI Agent - Dependencies
+# Core Web Scraping
 crawl4ai>=0.3.0
 aiohttp>=3.9.0
 asyncio-throttle>=1.0.2
 playwright>=1.40.0
 
-# Web UI Framework
+# Web Framework
 fastapi>=0.104.0
 uvicorn>=0.24.0
 websockets>=12.0
 python-multipart>=0.0.6
 
-# MCP Framework
-mcp>=1.0.0
+# AI Providers (Universal Support)
+openai>=1.0.0              # OpenAI, Azure OpenAI, OpenRouter
+anthropic>=0.8.0           # Anthropic Claude
+google-generativeai>=0.3.0 # Google Gemini
 
-# AI and ML
+# Local AI
 ollama>=0.1.0
-chromadb>=0.4.0
+
+# Data Processing
+pandas>=2.0.0
+beautifulsoup4>=4.12.0
 sentence-transformers>=2.2.0
-pydantic>=2.5.0
 
-# Database and Storage - SQLite & PostgreSQL Support
-asyncpg>=0.29.0
-redis>=5.0.0
-psycopg[binary]>=3.1.0
-
-# SQLite Support (built into Python, but async support)
-aiosqlite>=0.19.0
+# Database
+asyncpg>=0.29.0           # PostgreSQL
+aiosqlite>=0.19.0         # SQLite
 sqlalchemy[asyncio]>=2.0.0
-
-# Authentication and Security
-# twocaptcha-python>=1.2.0  # Commented out - install manually if needed
-undetected-playwright>=0.3.0
+redis>=5.0.0
+chromadb>=0.4.0
 
 # Utilities
 python-dotenv>=1.0.0
 loguru>=0.7.0
+pydantic>=2.5.0
 typer>=0.9.0
 rich>=13.0.0
-beautifulsoup4>=4.12.0
-pandas>=2.0.0
 
-# High-Volume Processing
-celery>=5.3.0
-flower>=2.0.0
-
-# Monitoring and Metrics
-prometheus-client>=0.19.0
-psutil>=5.9.0
-
-# Development dependencies
+# Development
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
 black>=23.0.0
 isort>=5.12.0
-mypy>=1.7.0
 
-# Optional dependencies for advanced features
-selenium>=4.15.0
-undetected-chromedriver>=3.5.0
-fake-useragent>=1.4.0
+# Optional: High Performance
+# celery>=5.3.0            # Background tasks
+# prometheus-client>=0.19.0 # Metrics
+# psutil>=5.9.0            # System monitoring
